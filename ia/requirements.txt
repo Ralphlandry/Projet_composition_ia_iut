@@ -1,0 +1,37 @@
+# Dépendances pour le Système de Correction Automatique IA
+
+# Framework Web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Traitement PDF
+PyPDF2==3.0.1
+
+# NLP et IA
+sentence-transformers==2.2.2
+transformers==4.35.0
+torch>=2.2.0
+
+# LLM Local
+ollama==0.1.6
+
+# Calcul Mathématique
+sympy==1.12
+numpy==1.26.2
+
+# Utilitaires
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Export Excel (pour génération de fichiers de notes)
+openpyxl==3.1.2
+pandas==2.1.3
+
+# Tests
+pytest==7.4.3
+httpx==0.25.2  # Pour tester l'API
+
+# Optionnel : Interface graphique
+# streamlit==1.29.0

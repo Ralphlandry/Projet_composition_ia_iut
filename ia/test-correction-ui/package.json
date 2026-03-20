@@ -1,0 +1,22 @@
+{
+  "name": "test-correction-ui",
+  "version": "1.0.0",
+  "description": "Interface de test pour l'API de correction IA",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "axios": "^1.6.0",
+    "pinia": "^2.1.7",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}
