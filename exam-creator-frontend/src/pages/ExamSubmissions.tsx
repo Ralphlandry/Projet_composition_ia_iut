@@ -15,6 +15,7 @@ interface Submission {
   score: number | null;
   started_at: string | null;
   submitted_at: string | null;
+  incidents: string | null;
   student: {
     full_name: string | null;
     email: string;
@@ -43,7 +44,7 @@ const ExamSubmissions = () => {
       const [examRes, subsRes] = await Promise.all([
         supabase.from('exams').select('id, title, total_points').eq('id', id!).single(),
         supabase.from('submissions')
-          .select('id, status, score, started_at, submitted_at, student:profiles(full_name, email)')
+          .select('id, status, score, started_at, submitted_at, incidents, student:profiles(full_name, email)')
           .eq('exam_id', id!)
           .order('started_at', { ascending: false }),
       ]);
@@ -171,6 +172,17 @@ const ExamSubmissions = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {(() => {
+                        const incidents = sub.incidents ? (() => { try { return JSON.parse(sub.incidents); } catch { return []; } })() : [];
+                        return incidents.length > 0 ? (
+                          <span
+                            className="text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 px-2 py-0.5 rounded-full border border-orange-300 dark:border-orange-700 cursor-help"
+                            title={incidents.map((e: {event:string;at:string}) => `${e.event} à ${new Date(e.at).toLocaleTimeString('fr-FR')}`).join(' | ')}
+                          >
+                            ⚠️ {incidents.length} incident{incidents.length > 1 ? 's' : ''} réseau
+                          </span>
+                        ) : null;
+                      })()}
                       {sub.score !== null && (
                         <span className="text-sm font-medium text-foreground">
                           {sub.score}/{exam?.total_points || 20}

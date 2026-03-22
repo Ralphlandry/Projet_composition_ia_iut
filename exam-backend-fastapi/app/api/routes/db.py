@@ -281,8 +281,9 @@ def db_update(
     # Allowlist strict pour les étudiants — empêche l'auto-notation
     if current_role == "etudiant":
         if payload.table == "submissions":
-            parsed_data = {k: v for k, v in parsed_data.items() if k in {"status"}}
-            if parsed_data.get("status") not in {"en_cours", "soumis"}:
+            # Champs autorisés : status (soumission) + incidents (journal réseau anti-triche)
+            parsed_data = {k: v for k, v in parsed_data.items() if k in {"status", "incidents"}}
+            if "status" in parsed_data and parsed_data["status"] not in {"en_cours", "soumis"}:
                 raise HTTPException(status_code=403, detail="Modification de statut non autorisée")
         elif payload.table == "answers":
             parsed_data = {k: v for k, v in parsed_data.items() if k in {"answer_text"}}

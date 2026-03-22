@@ -168,6 +168,7 @@ class Submission(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     graded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     graded_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    incidents: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Answer(Base):

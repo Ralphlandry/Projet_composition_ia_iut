@@ -58,6 +58,7 @@ const TakeExam = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -71,6 +72,8 @@ const TakeExam = () => {
   const [timeExpiredCountdown, setTimeExpiredCountdown] = useState(10);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [networkIncidentCount, setNetworkIncidentCount] = useState(0);
+  const networkIncidentsRef = useRef<Array<{ event: string; at: string }>>([]);
   const fullscreenActiveRef = useRef(false);
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -396,15 +399,29 @@ const TakeExam = () => {
 
   // Détection de la connexion réseau
   useEffect(() => {
+    const logIncident = (event: string) => {
+      const entry = { event, at: new Date().toISOString() };
+      networkIncidentsRef.current = [...networkIncidentsRef.current, entry];
+      setNetworkIncidentCount(c => c + 1);
+    };
+
     const handleOnline = () => {
       setIsOnline(true);
-      toast.success('Connexion rétablie — synchronisation en cours…', { duration: 4000 });
+      logIncident('reconnexion');
+      toast.success(
+        '⚠️ Changement de réseau détecté et enregistré dans votre copie. Synchronisation en cours…',
+        { duration: 6000 }
+      );
       // Sauvegarder immédiatement en DB dès le retour du réseau
       saveAnswersToDB();
     };
     const handleOffline = () => {
       setIsOnline(false);
-      toast.warning('Connexion perdue — vos réponses restent sauvegardées sur cet appareil.', { duration: 8000 });
+      logIncident('déconnexion');
+      toast.warning(
+        '⚠️ Déconnexion enregistrée — vos réponses sont sauvegardées localement.',
+        { duration: 8000 }
+      );
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -463,6 +480,14 @@ const TakeExam = () => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
       const token2 = (await supabase.auth.getSession()).data?.session?.access_token;
 
+      // Inclure le journal réseau dans la soumission (visible par le professeur)
+      if (networkIncidentsRef.current.length > 0) {
+        await supabase
+          .from('submissions')
+          .update({ incidents: JSON.stringify(networkIncidentsRef.current) })
+          .eq('id', sub.id);
+      }
+
       // Nettoyer la sauvegarde locale — soumission réussie
       localStorage.removeItem(`exam_draft_${sub.id}`);
       if (autoSaveRef.current) clearInterval(autoSaveRef.current);
@@ -505,14 +530,49 @@ const TakeExam = () => {
   // Anti-triche : soumission automatique si l'étudiant quitte l'onglet
   useEffect(() => {
     if (!submission) return;
+    let mobileAbsenceTimer: ReturnType<typeof setTimeout> | null = null;
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        performSubmit(true);
+        // Enregistrer l'événement dans les incidents (desktop + mobile)
+        const entry = { event: 'quitte_application', at: new Date().toISOString() };
+        networkIncidentsRef.current = [...networkIncidentsRef.current, entry];
+        setNetworkIncidentCount(c => c + 1);
+
+        if (isMobile) {
+          // Sur mobile : attendre 30s avant de soumettre
+          // Évite les faux positifs (appel entrant, notification) < 30s
+          mobileAbsenceTimer = setTimeout(() => {
+            performSubmitRef.current?.(true);
+          }, 15000);
+          toast.warning('⚠️ Sortie détectée — soumission automatique dans 15s si vous ne revenez pas.', { duration: 8000 });
+        } else {
+          // Sur desktop : soumission automatique immédiate
+          performSubmit(true);
+        }
+      } else if (document.visibilityState === 'visible') {
+        if (isMobile && mobileAbsenceTimer) {
+          // L'étudiant est revenu dans les 30s → annuler la soumission automatique
+          clearTimeout(mobileAbsenceTimer);
+          mobileAbsenceTimer = null;
+          const entry = { event: 'retour_application', at: new Date().toISOString() };
+          networkIncidentsRef.current = [...networkIncidentsRef.current, entry];
+          setNetworkIncidentCount(c => c + 1);
+          toast.info('Retour détecté — soumission automatique annulée.', { duration: 4000 });
+        } else if (isMobile) {
+          // Retour après soumission déjà déclenchée ou sans timer actif
+          const entry = { event: 'retour_application', at: new Date().toISOString() };
+          networkIncidentsRef.current = [...networkIncidentsRef.current, entry];
+          setNetworkIncidentCount(c => c + 1);
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [submission, performSubmit]);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (mobileAbsenceTimer) clearTimeout(mobileAbsenceTimer);
+    };
+  }, [submission, performSubmit, isMobile]);
 
   // Anti-triche : soumission automatique si l'étudiant sort du plein écran
   useEffect(() => {
@@ -544,6 +604,11 @@ const TakeExam = () => {
   }, [submission, loading]);
 
   const enterFullscreen = () => {
+    if (isMobile) {
+      // Sur mobile le plein écran n'est pas supporté — on ferme simplement le dialog
+      setShowFullscreenWarning(false);
+      return;
+    }
     const el = document.documentElement as HTMLElement & {
       webkitRequestFullscreen?: () => Promise<void>;
     };
@@ -590,6 +655,13 @@ const TakeExam = () => {
         {!isOnline && (
           <div className="sticky top-0 z-20 bg-destructive text-destructive-foreground text-center text-sm font-medium py-2 px-4">
             ⚠️ Connexion perdue — vos réponses sont sauvegardées localement. Ne fermez pas cet onglet.
+          </div>
+        )}
+
+        {/* Bannière incidents réseau — dissuasion */}
+        {isOnline && networkIncidentCount > 0 && (
+          <div className="sticky top-0 z-20 bg-orange-500 text-white text-center text-sm font-medium py-2 px-4">
+            ⚠️ {networkIncidentCount} changement{networkIncidentCount > 1 ? 's' : ''} de réseau détecté{networkIncidentCount > 1 ? 's' : ''} — enregistré{networkIncidentCount > 1 ? 's' : ''} et transmis à votre enseignant.
           </div>
         )}
 
@@ -769,22 +841,31 @@ const TakeExam = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Avertissement plein écran obligatoire */}
+      {/* Avertissement plein écran / démarrage examen */}
       <AlertDialog open={showFullscreenWarning} onOpenChange={() => {}}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Maximize className="w-5 h-5 text-primary" />
-              Mode plein écran requis
+              {isMobile ? 'Consignes de l\'examen' : 'Mode plein écran requis'}
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <span className="block">Pour garantir l'intégrité de l'épreuve, la composition se déroule en <strong>plein écran obligatoire</strong>.</span>
-              <span className="block text-destructive font-medium">Si vous quittez le plein écran ou changez d'onglet, votre épreuve sera soumise automatiquement avec les réponses déjà saisies.</span>
+              {isMobile ? (
+                <>
+                  <span className="block">Vous êtes sur un appareil mobile. Le plein écran n'est pas disponible sur ce type d'appareil.</span>
+                  <span className="block text-destructive font-medium">Ne quittez pas l'application pendant l'épreuve. Tout changement d'application sera enregistré et signalé à votre enseignant.</span>
+                </>
+              ) : (
+                <>
+                  <span className="block">Pour garantir l'intégrité de l'épreuve, la composition se déroule en <strong>plein écran obligatoire</strong>.</span>
+                  <span className="block text-destructive font-medium">Si vous quittez le plein écran ou changez d'onglet, votre épreuve sera soumise automatiquement avec les réponses déjà saisies.</span>
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction onClick={enterFullscreen}>
-              Commencer en plein écran
+              {isMobile ? 'J\'ai compris, commencer' : 'Commencer en plein écran'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
