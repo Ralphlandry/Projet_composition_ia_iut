@@ -18,6 +18,7 @@ import Corrections from "./pages/Corrections";
 import MyExams from "./pages/MyExams";
 import MyResults from "./pages/MyResults";
 import TakeExam from "./pages/TakeExam";
+import ExamResult from "./pages/ExamResult";
 import ExamSubmissions from "./pages/ExamSubmissions";
 import GradesBySubject from "./pages/prof/GradesBySubject";
 import GradesAllSubjects from "./pages/prof/GradesAllSubjects";
@@ -113,6 +114,7 @@ const AppRoutes = () => {
       <Route path="/my-exams" element={<ProtectedRoute allowedRoles={['etudiant']}><MyExams /></ProtectedRoute>} />
       <Route path="/my-results" element={<ProtectedRoute allowedRoles={['etudiant']}><MyResults /></ProtectedRoute>} />
       <Route path="/take-exam/:id" element={<ProtectedRoute allowedRoles={['etudiant']}><TakeExam /></ProtectedRoute>} />
+      <Route path="/exam-result/:id" element={<ProtectedRoute allowedRoles={['etudiant']}><ExamResult /></ProtectedRoute>} />
       
       {/* Admin routes */}
       <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />

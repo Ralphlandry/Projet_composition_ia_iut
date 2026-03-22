@@ -11,7 +11,6 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models import Answer, Exam, ExamQuestion, Notification, Profile, Specialty, StudentProfile, Submission
 from app.schemas import DBDeleteIn, DBInsertIn, DBQueryIn, DBUpdateIn
-from app.services.ai_service import auto_correct_submission
 from app.services.db_ops import (
     DATETIME_COLUMNS,
     TABLE_MODELS,
@@ -253,10 +252,6 @@ def db_update(
             setattr(row, "updated_at", datetime.utcnow())
 
     db.commit()
-
-    if payload.table == "submissions" and payload.data.get("status") == "soumis":
-        for row in rows:
-            auto_correct_submission(db, row.id)
 
     # Notifier l'étudiant quand sa note est définitive
     if payload.table == "submissions" and payload.data.get("status") == "corrige":

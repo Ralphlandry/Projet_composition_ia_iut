@@ -54,6 +54,7 @@ const Corrections = () => {
   const [saving, setSaving] = useState(false);
   const [applyingAi, setApplyingAi] = useState(false);
   const [grades, setGrades] = useState<{ [key: string]: { points: number; feedback: string } }>({});
+  const [aiSuggestions, setAiSuggestions] = useState<{ [key: string]: { points: number; feedback: string } }>({});
 
   useEffect(() => {
     if (id) {
@@ -99,13 +100,19 @@ const Corrections = () => {
       
       // Initialize grades
       const initialGrades: typeof grades = {};
+      const initialAiSuggestions: typeof grades = {};
       answersData.forEach((a: any) => {
         initialGrades[a.id] = {
           points: a.points_awarded || 0,
           feedback: a.feedback || '',
         };
+        initialAiSuggestions[a.id] = {
+          points: a.points_awarded || 0,
+          feedback: a.feedback || '',
+        };
       });
       setGrades(initialGrades);
+      setAiSuggestions(initialAiSuggestions);
     }
 
     setLoading(false);
@@ -290,15 +297,43 @@ const Corrections = () => {
                     <p className="text-foreground font-medium mb-2">
                       {answer.question?.question_text}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Réponse correcte: {answer.question?.correct_answer}
-                    </p>
+                    {answer.question?.correct_answer && (
+                      <p className="text-sm text-muted-foreground">
+                        Réponse correcte: <span className="font-medium text-foreground">{answer.question.correct_answer}</span>
+                      </p>
+                    )}
+                    {!answer.question?.correct_answer && (answer.question?.question_type === 'reponse_courte' || answer.question?.question_type === 'redaction') && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400">Question ouverte — correction guidée par l'IA</p>
+                    )}
                   </div>
 
                   <div className="p-3 bg-secondary rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Réponse de l'étudiant:</p>
-                    <p className="text-foreground">{answer.answer_text || 'Pas de réponse'}</p>
+                    <p className="text-sm text-muted-foreground mb-1">Réponse de l'étudiant :</p>
+                    <p className="text-foreground">{answer.answer_text || <em className="text-muted-foreground">Pas de réponse</em>}</p>
                   </div>
+
+                  {aiSuggestions[answer.id]?.feedback && (
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Analyse IA — proposition : {aiSuggestions[answer.id].points} / {answer.question?.points || 0} pt{(answer.question?.points || 0) > 1 ? 's' : ''}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-6 px-2 text-blue-600 hover:text-blue-700"
+                          onClick={() => setGrades({
+                            ...grades,
+                            [answer.id]: { ...aiSuggestions[answer.id] },
+                          })}
+                        >
+                          Appliquer
+                        </Button>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{aiSuggestions[answer.id].feedback}</p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">

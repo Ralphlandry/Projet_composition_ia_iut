@@ -24,6 +24,8 @@ interface Submission {
   exam: {
     title: string;
     total_points: number | null;
+    end_date: string | null;
+    duration_minutes: number | null;
     subject: { name: string; color: string } | null;
   } | null;
 }
@@ -69,6 +71,8 @@ const MyResults = () => {
           exam:exams(
             title,
             total_points,
+            end_date,
+            duration_minutes,
             subject:subjects(name, color)
           )
         `)
@@ -86,7 +90,29 @@ const MyResults = () => {
     }
   };
 
+  const isExamEnded = (submission: Submission): boolean => {
+    const exam = submission.exam;
+    if (!exam) return true;
+    if (exam.end_date) return Date.now() >= new Date(exam.end_date).getTime();
+    // Sans date de fin fixe : on ne peut pas savoir, on laisse voir
+    return true;
+  };
+
   const viewDetails = async (submission: Submission) => {
+    if (!isExamEnded(submission)) {
+      const exam = submission.exam;
+      let msg = "Les détails seront disponibles à la fin de l'épreuve.";
+      if (exam?.end_date) {
+        const end = new Date(exam.end_date);
+        const diff = end.getTime() - Date.now();
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const reste = h > 0 ? `${h}h${String(m).padStart(2, '0')}min` : `${m} min`;
+        msg = `Les détails seront disponibles dans environ ${reste}.`;
+      }
+      toast.info(msg);
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('answers')
@@ -244,9 +270,13 @@ const MyResults = () => {
                       </div>
                     )}
                     {canShowScore && (
-                      <Button variant="outline" onClick={() => viewDetails(submission)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => viewDetails(submission)}
+                        title={isExamEnded(submission) ? undefined : "Disponible à la fin de l'épreuve"}
+                      >
                         <Eye className="w-4 h-4 mr-2" />
-                        Détails
+                        {isExamEnded(submission) ? 'Détails' : 'Détails (verrouillé)'}
                       </Button>
                     )}
                   </div>
@@ -265,37 +295,49 @@ const MyResults = () => {
             <DialogTitle>Détails de la correction - {selectedSubmission?.exam?.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
-            {answers.map((answer, index) => (
-              <Card key={answer.id} className="bg-card border-border">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-full ${answer.is_correct ? 'bg-success/20' : 'bg-destructive/20'}`}>
-                      {answer.is_correct ? (
-                        <CheckCircle className="w-4 h-4 text-success" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-destructive" />
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <p className="font-medium text-foreground">
-                        Q{index + 1}: {answer.question?.question_text}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Votre réponse: {answer.answer_text || 'Pas de réponse'}
-                      </p>
-                      {answer.feedback && (
-                        <p className="text-sm text-primary bg-primary/10 p-2 rounded">
-                          Feedback: {answer.feedback}
+            {selectedSubmission && !isExamEnded(selectedSubmission) ? (
+              <div className="flex items-start gap-3 p-4 bg-secondary border border-border rounded-lg text-sm">
+                <Clock className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="font-medium text-foreground">Réponses masquées</p>
+                  <p className="text-muted-foreground">
+                    Le détail des corrections sera visible une fois l'épreuve terminée pour tous les étudiants.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              answers.map((answer, index) => (
+                <Card key={answer.id} className="bg-card border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-full ${answer.is_correct ? 'bg-success/20' : 'bg-destructive/20'}`}>
+                        {answer.is_correct ? (
+                          <CheckCircle className="w-4 h-4 text-success" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-destructive" />
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <p className="font-medium text-foreground">
+                          Q{index + 1}: {answer.question?.question_text}
                         </p>
-                      )}
-                      <p className="text-sm">
-                        Points: {answer.points_awarded || 0}/{answer.question?.points || 0}
-                      </p>
+                        <p className="text-sm text-muted-foreground">
+                          Votre réponse: {answer.answer_text || 'Pas de réponse'}
+                        </p>
+                        {answer.feedback && (
+                          <p className="text-sm text-primary bg-primary/10 p-2 rounded">
+                            Feedback: {answer.feedback}
+                          </p>
+                        )}
+                        <p className="text-sm">
+                          Points: {answer.points_awarded || 0}/{answer.question?.points || 0}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

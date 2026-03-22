@@ -513,12 +513,14 @@ const CreateExam = () => {
       return;
     }
 
-    // Block publication if some questions have no correct answer
+    // Block publication if QCM/VF questions have no correct answer
     if (status === 'publie') {
-      const missing = questions.filter((q) => !q.correct_answer?.trim());
+      const missing = questions.filter(
+        (q) => (q.question_type === 'qcm' || q.question_type === 'vrai_faux') && !q.correct_answer?.trim()
+      );
       if (missing.length > 0) {
         toast.error(
-          `${missing.length} question${missing.length > 1 ? 's' : ''} sans réponse correcte. Complétez toutes les réponses avant de publier.`
+          `${missing.length} question${missing.length > 1 ? 's' : ''} QCM/Vrai-Faux sans réponse correcte. Complétez-les avant de publier.`
         );
         return;
       }
@@ -1180,8 +1182,10 @@ const CreateExam = () => {
                               )}
                               {q.correct_answer ? (
                                 <span className="text-xs text-green-600 dark:text-green-400">✓ Réponse définie</span>
-                              ) : (
+                              ) : (q.question_type === 'qcm' || q.question_type === 'vrai_faux') ? (
                                 <span className="text-xs text-amber-600 dark:text-amber-400">Réponse manquante</span>
+                              ) : (
+                                <span className="text-xs text-blue-600 dark:text-blue-400">Correction par IA</span>
                               )}
                             </div>
                           </div>

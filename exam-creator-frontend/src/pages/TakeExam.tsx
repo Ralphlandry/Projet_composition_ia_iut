@@ -369,17 +369,16 @@ const TakeExam = () => {
 
       // Déclencher la correction IA en arrière-plan (fire-and-forget)
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
-      const sessionRes2 = await supabase.auth.getSession();
-      const token2 = sessionRes2?.data?.session?.access_token;
+      const token2 = (await supabase.auth.getSession()).data?.session?.access_token;
+
+      navigate(`/exam-result/${sub.id}`);
+
       if (token2) {
         fetch(`${API_URL}/api/exams/submissions/${sub.id}/auto-correct`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token2}` },
-        }).catch(() => { /* correction en arrière-plan, erreur ignorée */ });
-      }
-
-      navigate('/my-results');
-    } catch (error) {
+        }).catch(() => {});
+      }    } catch (error) {
       console.error('Error submitting exam:', error);
       toast.error('Erreur lors de la soumission');
       submittingRef.current = false;
