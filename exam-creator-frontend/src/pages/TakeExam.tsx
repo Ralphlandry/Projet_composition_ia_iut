@@ -364,8 +364,20 @@ const TakeExam = () => {
       if (isAutoSubmit) {
         toast.warning('Épreuve soumise automatiquement — navigation externe détectée');
       } else {
-        toast.success('Épreuve soumise avec succès');
+        toast.success('Épreuve soumise avec succès. Correction IA en cours...');
       }
+
+      // Déclencher la correction IA en arrière-plan (fire-and-forget)
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+      const sessionRes2 = await supabase.auth.getSession();
+      const token2 = sessionRes2?.data?.session?.access_token;
+      if (token2) {
+        fetch(`${API_URL}/api/exams/submissions/${sub.id}/auto-correct`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token2}` },
+        }).catch(() => { /* correction en arrière-plan, erreur ignorée */ });
+      }
+
       navigate('/my-results');
     } catch (error) {
       console.error('Error submitting exam:', error);

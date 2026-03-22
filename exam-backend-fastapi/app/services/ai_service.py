@@ -135,7 +135,7 @@ def auto_correct_submission(db: Session, submission_id: str) -> None:
         response = requests.post(
             f"{settings.ia_api_url}/api/corriger-copie",
             json={"evaluation": evaluation_payload, "copie": copie_payload},
-            timeout=30,
+            timeout=300,
         )
         response.raise_for_status()
         payload = response.json()

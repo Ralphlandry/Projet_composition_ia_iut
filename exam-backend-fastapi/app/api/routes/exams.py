@@ -9,11 +9,14 @@ from pydantic import BaseModel
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
+import threading
+
 from app.api.deps import get_current_user
 from app.core.config import settings
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 from app.models import Profile
 from app.services.db_ops import get_user_role
+from app.services.ai_service import auto_correct_submission
 
 router = APIRouter(prefix="/api/exams", tags=["exams"])
 
@@ -141,45 +144,84 @@ class _SuggestPayload(BaseModel):
     questions: list[_QuestionIn]
 
 
+def _has_letter_prefix(options: list[str]) -> bool:
+    """Return True if all options already start with A. / B. / C. / D. etc."""
+    return bool(options) and all(
+        re.match(r'^[A-Da-d][.\)]\s', o) for o in options
+    )
+
+
 def _build_answer_prompt(q: _QuestionIn) -> str:
-    """Build prompt. Use numbered options to avoid letter/content confusion."""
+    """Build prompt using Qwen2.5 native instruction format."""
 
     if q.question_type == "qcm" and q.options:
-        opts_str = "\n".join(f"Option {i+1}: {o}" for i, o in enumerate(q.options))
-        return (
-            f"Question: {q.question_text}\n"
-            f"{opts_str}\n"
-            f"Quelle option est correcte ? Réponds UNIQUEMENT par le numéro (1, 2 ou {len(q.options)}):"
-        )
+        if _has_letter_prefix(q.options):
+            opts_str = "\n".join(q.options)
+            letters = "/".join(chr(65 + i) for i in range(len(q.options)))
+            return (
+                "### Instruction\n"
+                "Tu es un assistant expert en informatique et en commerce electronique. "
+                f"Reponds a la question a choix multiples en donnant UNIQUEMENT la lettre correcte ({letters}).\n\n"
+                f"### Question\n{q.question_text}\n\n"
+                f"### Options\n{opts_str}\n\n"
+                "### Reponse\n"
+            )
+        else:
+            opts_str = "\n".join(f"{i+1}. {o}" for i, o in enumerate(q.options))
+            return (
+                "### Instruction\n"
+                "Tu es un assistant expert en informatique et en commerce electronique. "
+                "Reponds a la question a choix multiples en donnant UNIQUEMENT le numero de la bonne reponse.\n\n"
+                f"### Question\n{q.question_text}\n\n"
+                f"### Options\n{opts_str}\n\n"
+                "### Reponse\n"
+            )
 
     if q.question_type == "vrai_faux":
-        return f"{q.question_text}\nRéponds UNIQUEMENT par Vrai ou Faux:"
+        return (
+            "### Instruction\n"
+            "Tu es un assistant expert en informatique et en commerce electronique. "
+            "Reponds UNIQUEMENT par Vrai ou Faux.\n\n"
+            f"### Question\n{q.question_text}\n\n"
+            "### Reponse\n"
+        )
 
-    if q.question_type == "reponse_courte":
-        return f"{q.question_text}\nRéponse courte:"
-
-    return f"{q.question_text}\nRéponse:"
+    # reponse_courte ou qcm sans options
+    return (
+        "### Instruction\n"
+        "Tu es un assistant expert en informatique et en commerce electronique. "
+        "Donne une reponse courte et precise en une phrase.\n\n"
+        f"### Question\n{q.question_text}\n\n"
+        "### Reponse\n"
+    )
 
 
 def _ask_ollama(prompt: str, question_type: str = "") -> str | None:
-    """Call Ollama with mistral. Token limit adapts to question type."""
+    """Call Ollama with qwen2.5:3b. Token and context limits adapt to question type."""
     ollama_host = "http://localhost:11434"
-    if question_type in ("qcm", "vrai_faux"):
-        max_tokens = 10
-    elif question_type == "reponse_courte":
-        max_tokens = 150
+    if question_type == "vrai_faux":
+        max_tokens = 5
+        num_ctx = 512
+    elif question_type == "qcm_options":  # QCM avec options : juste un chiffre
+        max_tokens = 5
+        num_ctx = 512
+    elif question_type in ("reponse_courte", "qcm"):  # QCM sans options ou réponse courte
+        max_tokens = 80
+        num_ctx = 512
     else:
-        max_tokens = 500
+        max_tokens = 300
+        num_ctx = 1024
     try:
         resp = requests.post(
             f"{ollama_host}/api/generate",
             json={
-                "model": "mistral",
+                "model": "qwen2.5:3b",
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0, "num_predict": max_tokens},
+                "keep_alive": -1,
+                "options": {"temperature": 0, "num_predict": max_tokens, "num_ctx": num_ctx},
             },
-            timeout=300,
+            timeout=120,
         )
         resp.raise_for_status()
         return (resp.json().get("response") or "").strip()
@@ -192,15 +234,29 @@ def _clean_llm_answer(raw: str | None, q: _QuestionIn) -> str:
     if not raw:
         return ""
 
-    # For QCM, extract option number → resolve to full option text.
+    # For QCM, parse letter (A/B/C/D) or number depending on option format.
     if q.question_type == "qcm" and q.options:
-        # Find a number (1, 2, 3, ...) in the response
-        m = re.search(r"\b([1-9])\b", raw)
-        if m:
-            index = int(m.group(1)) - 1  # 1-based → 0-based
-            if 0 <= index < len(q.options):
-                return q.options[index]
-        return ""
+        if _has_letter_prefix(q.options):
+            # Model was asked for a letter → extract A/B/C/D
+            m = re.search(r'\b([A-Da-d])\b', raw)
+            if m:
+                idx = ord(m.group(1).upper()) - ord('A')
+                if 0 <= idx < len(q.options):
+                    return q.options[idx]
+            # Fallback: maybe model returned the full text of an option
+            raw_low = raw.lower()
+            for opt in q.options:
+                if opt[3:].strip().lower() in raw_low:
+                    return opt
+            return ""
+        else:
+            # Model was asked for a number 1-N
+            m = re.search(r"\b([1-9])\b", raw)
+            if m:
+                index = int(m.group(1)) - 1
+                if 0 <= index < len(q.options):
+                    return q.options[index]
+            return ""
 
     # For Vrai/Faux, normalise.
     if q.question_type == "vrai_faux":
@@ -221,9 +277,24 @@ def _clean_llm_answer(raw: str | None, q: _QuestionIn) -> str:
 
 def _process_one_question(q: _QuestionIn) -> dict[str, Any]:
     """Process a single question through the LLM."""
+    # Determine effective type for token budget
+    if q.question_type == "qcm" and q.options:
+        effective_type = "qcm_options"
+    else:
+        effective_type = q.question_type
+
     prompt = _build_answer_prompt(q)
-    raw_answer = _ask_ollama(prompt, q.question_type)
+    print(f"\n{'='*60}")
+    print(f"[IA SUGGEST] type={effective_type}")
+    print(f"[IA SUGGEST] PROMPT ENVOYE:\n{prompt}")
+
+    raw_answer = _ask_ollama(prompt, effective_type)
+    print(f"[IA SUGGEST] REPONSE BRUTE OLLAMA: {repr(raw_answer)}")
+
     suggested = _clean_llm_answer(raw_answer, q)
+    print(f"[IA SUGGEST] REPONSE NETTOYEE: {repr(suggested)}")
+    print(f"{'='*60}\n")
+
     return {
         "question_text": q.question_text,
         "question_type": q.question_type,
@@ -273,3 +344,25 @@ def suggest_answers(
         "data": {"questions": results},
         "error": None,
     }
+
+
+@router.post("/submissions/{submission_id}/auto-correct")
+def trigger_auto_correct(
+    submission_id: str,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(get_current_user),
+):
+    """Déclenche la correction IA d'une soumission en arrière-plan."""
+    role = get_user_role(db, current_user.id)
+    if role not in {"admin", "professeur", "etudiant"}:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    def _run():
+        bg_db = SessionLocal()
+        try:
+            auto_correct_submission(bg_db, submission_id)
+        finally:
+            bg_db.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "correction_en_cours", "submission_id": submission_id}
