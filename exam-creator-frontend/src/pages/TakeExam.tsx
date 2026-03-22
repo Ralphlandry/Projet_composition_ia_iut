@@ -70,6 +70,7 @@ const TakeExam = () => {
   const [showTimeExpiredDialog, setShowTimeExpiredDialog] = useState(false);
   const [timeExpiredCountdown, setTimeExpiredCountdown] = useState(10);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const fullscreenActiveRef = useRef(false);
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -393,6 +394,27 @@ const TakeExam = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submission]);
 
+  // Détection de la connexion réseau
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Connexion rétablie — synchronisation en cours…', { duration: 4000 });
+      // Sauvegarder immédiatement en DB dès le retour du réseau
+      saveAnswersToDB();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('Connexion perdue — vos réponses restent sauvegardées sur cet appareil.', { duration: 8000 });
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fonction centrale de soumission — utilise des refs pour éviter les closures obsolètes
   const performSubmit = useCallback(async (isAutoSubmit = false) => {
     const sub = submissionRef.current;
@@ -564,6 +586,13 @@ const TakeExam = () => {
   return (
     <AppLayout title={exam.title}>
       <div className="space-y-4 animate-fade-in pb-20 md:pb-0">
+        {/* Bannière hors-ligne */}
+        {!isOnline && (
+          <div className="sticky top-0 z-20 bg-destructive text-destructive-foreground text-center text-sm font-medium py-2 px-4">
+            ⚠️ Connexion perdue — vos réponses sont sauvegardées localement. Ne fermez pas cet onglet.
+          </div>
+        )}
+
         {/* Timer and Progress */}
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur py-2 md:py-3 px-1 md:px-0 border-b border-border">
           <div className="flex items-center justify-between gap-2">
@@ -584,12 +613,13 @@ const TakeExam = () => {
             </div>
             <Button 
               onClick={() => setShowConfirmDialog(true)}
-              disabled={submitting}
+              disabled={submitting || !isOnline}
               size="sm"
               className="gradient-primary flex-shrink-0"
+              title={!isOnline ? 'Connexion requise pour soumettre' : undefined}
             >
               <Send className="w-4 h-4 md:mr-2" />
-              <span className="hidden md:inline">Soumettre</span>
+              <span className="hidden md:inline">{isOnline ? 'Soumettre' : 'Hors-ligne…'}</span>
             </Button>
             {!isFullscreen && (
               <button
