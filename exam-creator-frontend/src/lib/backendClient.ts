@@ -61,8 +61,10 @@ type AuthListener = (event: string, session: Session | null) => void;
 const authListeners: AuthListener[] = [];
 
 function getStoredSession(): Session | null {
-  const token = localStorage.getItem(TOKEN_KEY);
-  const userJson = localStorage.getItem(USER_KEY);
+  // sessionStorage : le token n'est pas conservé après fermeture du navigateur/onglet
+  // (moins de risque de vol que localStorage en cas de XSS persistant)
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const userJson = sessionStorage.getItem(USER_KEY);
   if (!token || !userJson) return null;
   try {
     const user = JSON.parse(userJson);
@@ -74,11 +76,11 @@ function getStoredSession(): Session | null {
 
 function setStoredSession(session: Session | null) {
   if (!session) {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
   } else {
-    localStorage.setItem(TOKEN_KEY, session.access_token);
-    localStorage.setItem(USER_KEY, JSON.stringify(session.user));
+    sessionStorage.setItem(TOKEN_KEY, session.access_token);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(session.user));
   }
 
   authListeners.forEach((cb) => cb(session ? 'SIGNED_IN' : 'SIGNED_OUT', session));

@@ -69,7 +69,9 @@ const TakeExam = () => {
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
   const [showTimeExpiredDialog, setShowTimeExpiredDialog] = useState(false);
   const [timeExpiredCountdown, setTimeExpiredCountdown] = useState(10);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const fullscreenActiveRef = useRef(false);
+  const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Refs stables pour les event listeners (anti-triche + timer)
   const answersRef = useRef<Record<string, string>>({});
@@ -281,20 +283,52 @@ const TakeExam = () => {
         setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
       }
 
-      // Load existing answers if any
+      // --- Restauration après coupure de courant / rechargement ---
+      // 1. localStorage = sauvegardé à chaque frappe → toujours plus récent
+      // 2. DB         = checkpoint toutes les 30s   → peut être jusqu'à 30s en retard
+      // Stratégie : on charge les deux et on prend le plus récent.
+
+      let localDraft: Record<string, string> = {};
+      let localSavedAt = 0;
+      try {
+        const raw = localStorage.getItem(`exam_draft_${activeSubmissionId}`);
+        if (raw) {
+          const draft = JSON.parse(raw) as { answers: Record<string, string>; savedAt: number };
+          const ageMin = (Date.now() - draft.savedAt) / 60000;
+          if (ageMin < 180 && draft.answers && Object.keys(draft.answers).length > 0) {
+            localDraft = draft.answers;
+            localSavedAt = draft.savedAt;
+          }
+        }
+      } catch { /* ignore */ }
+
       const { data: existingAnswers } = await supabase
         .from('answers')
         .select('question_id, answer_text')
         .eq('submission_id', activeSubmissionId);
 
+      const dbAnswers: Record<string, string> = {};
       if (existingAnswers) {
-        const savedAnswers: Record<string, string> = {};
         existingAnswers.forEach(a => {
           if (a.question_id && a.answer_text) {
-            savedAnswers[a.question_id] = a.answer_text;
+            dbAnswers[a.question_id] = a.answer_text;
           }
         });
+      }
+
+      // localStorage est plus récent → on part de la DB comme base, on écrase avec localStorage
+      const savedAnswers: Record<string, string> = { ...dbAnswers };
+      if (Object.keys(localDraft).length > 0) {
+        Object.assign(savedAnswers, localDraft);
+        const whenStr = new Date(localSavedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        toast.info(`Réponses restaurées depuis votre appareil (sauvegarde de ${whenStr}).`, { duration: 6000 });
+      } else if (Object.keys(dbAnswers).length > 0) {
+        toast.info('Réponses précédentes rechargées.', { duration: 3000 });
+      }
+
+      if (Object.keys(savedAnswers).length > 0) {
         setAnswers(savedAnswers);
+        answersRef.current = savedAnswers;
       }
     } catch (error) {
       console.error('Error fetching exam:', error);
@@ -319,9 +353,45 @@ const TakeExam = () => {
     setAnswers(prev => {
       const next = { ...prev, [questionId]: value };
       answersRef.current = next;
+      // Sauvegarde immédiate dans localStorage (protection coupure de courant)
+      if (submissionRef.current?.id) {
+        localStorage.setItem(
+          `exam_draft_${submissionRef.current.id}`,
+          JSON.stringify({ answers: next, savedAt: Date.now() })
+        );
+      }
       return next;
     });
   };
+
+  // Sauvegarde silencieuse en base toutes les 30s
+  const saveAnswersToDB = async () => {
+    const sub = submissionRef.current;
+    const ans = answersRef.current;
+    const qs = questionsRef.current;
+    if (!sub || submittingRef.current || Object.keys(ans).length === 0) return;
+    try {
+      const answersToUpsert = qs.map(eq => ({
+        submission_id: sub.id,
+        question_id: eq.question_id,
+        answer_text: ans[eq.question_id] || null,
+      }));
+      await supabase.from('answers').delete().eq('submission_id', sub.id);
+      await supabase.from('answers').insert(answersToUpsert);
+      setLastSaved(new Date());
+    } catch {
+      // Silencieux — la sauvegarde locale reste disponible
+    }
+  };
+
+  useEffect(() => {
+    if (!submission) return;
+    autoSaveRef.current = setInterval(saveAnswersToDB, 30000);
+    return () => {
+      if (autoSaveRef.current) clearInterval(autoSaveRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission]);
 
   // Fonction centrale de soumission — utilise des refs pour éviter les closures obsolètes
   const performSubmit = useCallback(async (isAutoSubmit = false) => {
@@ -370,6 +440,10 @@ const TakeExam = () => {
       // Déclencher la correction IA en arrière-plan (fire-and-forget)
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
       const token2 = (await supabase.auth.getSession()).data?.session?.access_token;
+
+      // Nettoyer la sauvegarde locale — soumission réussie
+      localStorage.removeItem(`exam_draft_${sub.id}`);
+      if (autoSaveRef.current) clearInterval(autoSaveRef.current);
 
       navigate(`/exam-result/${sub.id}`);
 
@@ -502,6 +576,11 @@ const TakeExam = () => {
             <div className="text-xs md:text-sm text-muted-foreground text-center">
               <span className="hidden sm:inline">{answeredCount}/{totalQuestions} questions répondues</span>
               <span className="sm:hidden">{answeredCount}/{totalQuestions}</span>
+              {lastSaved && (
+                <span className="block text-xs text-green-600 dark:text-green-400">
+                  ✓ Sauvegardé {lastSaved.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </div>
             <Button 
               onClick={() => setShowConfirmDialog(true)}
