@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { supabase } from '@/lib/backendClient';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -62,13 +63,14 @@ const Auth = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { signIn, signUp } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   useEffect(() => {
     const loadSignUpOptions = async () => {
       const { data, error } = await supabase.auth.getSignUpOptions();
       if (error || !data) {
-        toast.error('Impossible de charger les options d\'inscription');
+        toast.error(t('Impossible de charger les options d\'inscription'));
         return;
       }
       setSignUpOptions({
@@ -90,12 +92,12 @@ const Auth = () => {
         const { error } = await signIn(validated.email, validated.password);
         if (error) {
           if (error.message.includes('Invalid login')) {
-            toast.error('Email ou mot de passe incorrect');
+            toast.error(t('Email ou mot de passe incorrect'));
           } else {
             toast.error(error.message);
           }
         } else {
-          toast.success('Connexion réussie !');
+          toast.success(t('Connexion réussie !'));
           navigate('/');
         }
       } else {
@@ -111,12 +113,12 @@ const Auth = () => {
         });
         if (error) {
           if (error.message.includes('already registered') || error.message.includes('déjà utilisé')) {
-            toast.error('Cet email est déjà utilisé');
+            toast.error(t('Cet email est déjà utilisé'));
           } else {
             toast.error(error.message);
           }
         } else {
-          toast.success('Compte créé avec succès !');
+          toast.success(t('Compte créé avec succès !'));
           navigate('/');
         }
       }
@@ -143,8 +145,8 @@ const Auth = () => {
           <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center mb-4 shadow-glow">
             <GraduationCap className="w-9 h-9 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Bienvenue</h1>
-          <p className="text-muted-foreground">La création d'examens, simplifiée.</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('Bienvenue')}</h1>
+          <p className="text-muted-foreground">{t("La création d'examens, simplifiée.")}</p>
         </div>
 
         {/* Tabs */}
@@ -157,7 +159,7 @@ const Auth = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Se Connecter
+            {t('Se Connecter')}
           </button>
           <button
             onClick={() => setIsLogin(false)}
@@ -167,7 +169,7 @@ const Auth = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            S'inscrire
+            {t('S\'inscrire')}
           </button>
         </div>
 
@@ -175,11 +177,11 @@ const Auth = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <div className="space-y-2">
-              <Label htmlFor="fullName">Nom complet</Label>
+              <Label htmlFor="fullName">{t('Nom complet')}</Label>
               <Input
                 id="fullName"
                 type="text"
-                placeholder="Entrez votre nom"
+                placeholder={t('Entrez votre nom')}
                 value={formData.fullName}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 className={errors.fullName ? 'border-destructive' : ''}
@@ -192,7 +194,7 @@ const Auth = () => {
 
           {!isLogin && (
             <div className="space-y-2">
-              <Label>Je suis</Label>
+              <Label>{t('Je suis')}</Label>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -203,7 +205,7 @@ const Auth = () => {
                       : 'bg-card text-muted-foreground border-border hover:text-foreground'
                   }`}
                 >
-                  Étudiant
+                  {t('Étudiant')}
                 </button>
                 <button
                   type="button"
@@ -214,23 +216,23 @@ const Auth = () => {
                       : 'bg-card text-muted-foreground border-border hover:text-foreground'
                   }`}
                 >
-                  Professeur
+                  {t('Professeur')}
                 </button>
               </div>
               {formData.role === 'professeur' && (
                 <p className="text-xs text-muted-foreground">
-                  Les comptes administrateur sont créés uniquement par un administrateur.
+                  {t('Les comptes administrateur sont créés uniquement par un administrateur.')}
                 </p>
               )}
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email">Adresse e-mail</Label>
+            <Label htmlFor="email">{t('Adresse e-mail')}</Label>
             <Input
               id="email"
               type="email"
-              placeholder="entrez votre e-mail"
+              placeholder={t('entrez votre e-mail')}
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className={errors.email ? 'border-destructive' : ''}
@@ -241,12 +243,12 @@ const Auth = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">{isLogin ? 'Mot de passe' : 'Créer un mot de passe'}</Label>
+            <Label htmlFor="password">{isLogin ? t('Mot de passe') : t('Créer un mot de passe')}</Label>
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
-                placeholder="entrez votre mot de passe"
+                placeholder={t('entrez votre mot de passe')}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
@@ -266,11 +268,11 @@ const Auth = () => {
 
           {!isLogin && (
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+              <Label htmlFor="confirmPassword">{t('Confirmer le mot de passe')}</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="confirmez votre mot de passe"
+                placeholder={t('confirmez votre mot de passe')}
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 className={errors.confirmPassword ? 'border-destructive' : ''}
@@ -284,7 +286,7 @@ const Auth = () => {
           {!isLogin && formData.role === 'etudiant' && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="studentNumber">Matricule étudiant</Label>
+                <Label htmlFor="studentNumber">{t('Matricule étudiant')}</Label>
                 <Input
                   id="studentNumber"
                   type="text"
@@ -297,13 +299,13 @@ const Auth = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="levelId">Niveau</Label>
+                <Label htmlFor="levelId">{t('Niveau')}</Label>
                 <Select
                   value={formData.levelId}
                   onValueChange={(value) => setFormData({ ...formData, levelId: value })}
                 >
                   <SelectTrigger className={errors.levelId ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Choisir un niveau" />
+                    <SelectValue placeholder={t('Choisir un niveau')} />
                   </SelectTrigger>
                   <SelectContent>
                     {signUpOptions.levels.map((level) => (
@@ -315,13 +317,13 @@ const Auth = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="specialtyId">Spécialité</Label>
+                <Label htmlFor="specialtyId">{t('Spécialité')}</Label>
                 <Select
                   value={formData.specialtyId}
                   onValueChange={(value) => setFormData({ ...formData, specialtyId: value })}
                 >
                   <SelectTrigger className={errors.specialtyId ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Choisir une spécialité" />
+                    <SelectValue placeholder={t('Choisir une spécialité')} />
                   </SelectTrigger>
                   <SelectContent>
                     {signUpOptions.specialties.map((specialty) => (
@@ -340,16 +342,16 @@ const Auth = () => {
             disabled={loading}
           >
             {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {isLogin ? 'Se Connecter' : 'Créer mon compte'}
+            {isLogin ? t('Se Connecter') : t('Créer mon compte')}
           </Button>
         </form>
 
         {!isLogin && (
           <p className="text-xs text-center text-muted-foreground">
-            En créant un compte, vous acceptez nos{' '}
-            <a href="#" className="text-primary hover:underline">Conditions d'Utilisation</a>
-            {' '}et notre{' '}
-            <a href="#" className="text-primary hover:underline">Politique de Confidentialité</a>.
+            {t('En créant un compte, vous acceptez nos')}{' '}
+            <a href="#" className="text-primary hover:underline">{t("Conditions d'Utilisation")}</a>
+            {' '}{t('et notre')}{' '}
+            <a href="#" className="text-primary hover:underline">{t('Politique de Confidentialité')}</a>.
           </p>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Clock, Play, CheckCircle, AlertCircle } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 
 interface Exam {
   id: string;
@@ -32,6 +34,7 @@ interface Submission {
 
 const MyExams = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [exams, setExams] = useState<Exam[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -39,9 +42,10 @@ const MyExams = () => {
 
   useEffect(() => {
     fetchExamsAndSubmissions();
-    const interval = setInterval(() => fetchExamsAndSubmissions(true), 30000);
-    return () => clearInterval(interval);
   }, [user]);
+
+  const silentRefresh = useCallback(() => fetchExamsAndSubmissions(true), [user]);
+  useVisibilityPolling(silentRefresh, 60000, !!user);
 
   const fetchExamsAndSubmissions = async (silent = false) => {
     if (!user) return;
@@ -139,21 +143,21 @@ const MyExams = () => {
     const endDate = exam.end_date ? new Date(exam.end_date) : null;
 
     if (submission?.status === 'corrige_auto') {
-      return { label: 'Note provisoire', color: 'bg-primary text-primary-foreground', icon: CheckCircle };
+      return { label: t('Note provisoire'), color: 'bg-primary text-primary-foreground', icon: CheckCircle };
     }
     if (submission?.status === 'soumis' || submission?.status === 'corrige') {
-      return { label: 'Soumis', color: 'bg-success text-success-foreground', icon: CheckCircle };
+      return { label: t('Soumis'), color: 'bg-success text-success-foreground', icon: CheckCircle };
     }
     if (submission?.status === 'en_cours') {
-      return { label: 'En cours', color: 'bg-warning text-warning-foreground', icon: Clock };
+      return { label: t('En cours'), color: 'bg-warning text-warning-foreground', icon: Clock };
     }
     if (endDate && now > endDate) {
-      return { label: 'Terminé', color: 'bg-muted text-muted-foreground', icon: AlertCircle };
+      return { label: t('Terminé'), color: 'bg-muted text-muted-foreground', icon: AlertCircle };
     }
     if (startDate && now < startDate) {
-      return { label: 'À venir', color: 'bg-secondary text-secondary-foreground', icon: Clock };
+      return { label: t('À venir'), color: 'bg-secondary text-secondary-foreground', icon: Clock };
     }
-    return { label: 'Disponible', color: 'bg-primary text-primary-foreground', icon: Play };
+    return { label: t('Disponible'), color: 'bg-primary text-primary-foreground', icon: Play };
   };
 
   const canStartExam = (exam: Exam) => {
@@ -191,7 +195,7 @@ const MyExams = () => {
         {exams.length === 0 ? (
           <Card className="bg-card border-border">
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">Aucune épreuve disponible pour le moment</p>
+              <p className="text-muted-foreground">{t('Aucune épreuve disponible pour le moment')}</p>
             </CardContent>
           </Card>
         ) : (
@@ -240,13 +244,13 @@ const MyExams = () => {
                       {canStartExam(exam) && (
                         <Button onClick={() => startExam(exam.id)} className="gradient-primary">
                           <Play className="w-4 h-4 mr-2" />
-                          Commencer
+                          {t('Commencer')}
                         </Button>
                       )}
                       {canContinueExam(exam) && (
                         <Button onClick={() => navigate(`/take-exam/${exam.id}`)} className="gradient-primary">
                           <Play className="w-4 h-4 mr-2" />
-                          Continuer
+                          {t('Continuer')}
                         </Button>
                       )}
                     </div>

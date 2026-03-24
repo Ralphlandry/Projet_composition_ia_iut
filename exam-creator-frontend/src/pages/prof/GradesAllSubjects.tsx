@@ -17,11 +17,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/lib/backendClient';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/useLanguage';
 
 type IdName = { id: string; name: string };
 
 type StudentProfileRef = {
   user_id: string;
+  student_number?: string | null;
 };
 
 type ProfileRef = {
@@ -34,6 +36,7 @@ type GlobalRow = {
   student_id: string;
   full_name: string;
   email: string;
+  student_number: string;
   subject_name: string;
   exam_title: string;
   score: number | null;
@@ -78,6 +81,7 @@ const sortRows = (rows: GlobalRow[]) =>
   });
 
 const GradesAllSubjects = () => {
+  const { t } = useLanguage();
   const [levels, setLevels] = useState<IdName[]>([]);
   const [specialties, setSpecialties] = useState<IdName[]>([]);
   const [filters, setFilters] = useState({ level_id: '', specialty_id: '' });
@@ -136,7 +140,7 @@ const GradesAllSubjects = () => {
 
   const fetchGrades = async () => {
     if (!filters.level_id || !filters.specialty_id) {
-      toast.error('Sélectionnez niveau et filière');
+      toast.error(t('Sélectionnez niveau et filière'));
       return;
     }
 
@@ -144,13 +148,14 @@ const GradesAllSubjects = () => {
     try {
       const studentProfilesRes = await supabase
         .from('student_profiles')
-        .select('user_id')
+        .select('user_id, student_number')
         .eq('level_id', filters.level_id)
         .eq('specialty_id', filters.specialty_id);
 
-      const studentIds = ((studentProfilesRes.data || []) as StudentProfileRef[])
-        .map((sp) => sp.user_id)
-        .filter(Boolean);
+      const studentProfiles = (studentProfilesRes.data || []) as StudentProfileRef[];
+      const studentIds = studentProfiles.map((sp) => sp.user_id).filter(Boolean);
+      const matriculeMap = new Map<string, string>();
+      studentProfiles.forEach((sp) => { if (sp.user_id) matriculeMap.set(sp.user_id, sp.student_number || ''); });
 
       if (studentIds.length === 0) {
         setRows([]);
@@ -230,6 +235,7 @@ const GradesAllSubjects = () => {
             student_id: studentId,
             full_name: profile.full_name || profile.email,
             email: profile.email,
+            student_number: matriculeMap.get(studentId) || '',
             subject_name: subjectName,
             exam_title: selectedExam?.title || '-',
             score: selectedSubmission?.score ?? null,
@@ -244,7 +250,7 @@ const GradesAllSubjects = () => {
       setLoaded(true);
     } catch (error) {
       console.error(error);
-      toast.error('Erreur lors du chargement des notes globales');
+      toast.error(t('Erreur lors du chargement des notes globales'));
     } finally {
       setLoading(false);
     }
@@ -252,42 +258,46 @@ const GradesAllSubjects = () => {
 
   const exportExcel = () => {
     if (filteredRows.length === 0) {
-      toast.error('Aucune donnée à exporter');
+      toast.error(t('Aucune donnée à exporter'));
       return;
     }
 
     const statusLabels: Record<string, string> = {
-      corrige: 'Validée',
-      corrige_auto: 'Provisoire',
-      soumis: 'Soumis',
-      non_compose: 'Non composé',
+      corrige: t('Validée'),
+      corrige_auto: t('Provisoire'),
+      soumis: t('Soumis'),
+      non_compose: t('Non composé'),
     };
 
     const data = filteredRows.map((r, idx) => ({
-      'N°': idx + 1,
-      'Nom complet': r.full_name,
-      'Email': r.email,
-      'Matière': r.subject_name,
-      'Épreuve': r.exam_title,
-      'Note': r.score ?? '',
-      'Barème': r.total_points ?? '',
-      'Note /20': r.score !== null && r.total_points ? Math.round(((r.score / r.total_points) * 20) * 100) / 100 : '',
-      'Statut': statusLabels[r.submission_status] || r.submission_status,
-      'Date de soumission': r.submitted_at ? new Date(r.submitted_at).toLocaleString('fr-FR') : '',
+      [t('N°')]: idx + 1,
+      [t('Matricule')]: r.student_number,
+      [t('Nom complet')]: r.full_name,
+      [t('Email')]: r.email,
+      [t('Matière')]: r.subject_name,
+      [t('Épreuve')]: r.exam_title,
+      [t('Note')]: r.score ?? '',
+      [t('Barème')]: r.total_points ?? '',
+      [t('Note /20')]: r.score !== null && r.total_points ? Math.round(((r.score / r.total_points) * 20) * 100) / 100 : '',
+      [t('Décision')]: r.score !== null && r.total_points ? ((r.score / r.total_points) * 20 >= 10 ? t('Validé') : t('Non validé')) : '',
+      [t('Statut')]: statusLabels[r.submission_status] || r.submission_status,
+      [t('Date de soumission')]: r.submitted_at ? new Date(r.submitted_at).toLocaleString('fr-FR') : '',
     }));
 
     if (stats.moyenne !== null) {
       data.push({
-        'N°': '' as any,
-        'Nom complet': '',
-        'Email': '',
-        'Matière': '',
-        'Épreuve': 'MOYENNE GÉNÉRALE',
-        'Note': '' as any,
-        'Barème': '' as any,
-        'Note /20': Math.round(stats.moyenne * 100) / 100 as any,
-        'Statut': '',
-        'Date de soumission': '',
+        [t('N°')]: '' as any,
+        [t('Matricule')]: '',
+        [t('Nom complet')]: '',
+        [t('Email')]: '',
+        [t('Matière')]: '',
+        [t('Épreuve')]: t('MOYENNE GÉNÉRALE'),
+        [t('Note')]: '' as any,
+        [t('Barème')]: '' as any,
+        [t('Note /20')]: Math.round(stats.moyenne * 100) / 100 as any,
+        [t('Décision')]: '',
+        [t('Statut')]: '',
+        [t('Date de soumission')]: '',
       });
     }
 
@@ -301,10 +311,10 @@ const GradesAllSubjects = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === 'corrige') return <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-0">Validée</Badge>;
-    if (status === 'corrige_auto') return <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0">Provisoire</Badge>;
-    if (status === 'soumis') return <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">Soumis</Badge>;
-    return <Badge className="bg-muted text-muted-foreground border-0">Non composé</Badge>;
+    if (status === 'corrige') return <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-0">{t('Validée')}</Badge>;
+    if (status === 'corrige_auto') return <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0">{t('Provisoire')}</Badge>;
+    if (status === 'soumis') return <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">{t('Soumis')}</Badge>;
+    return <Badge className="bg-muted text-muted-foreground border-0">{t('Non composé')}</Badge>;
   };
 
   const getScoreDisplay = (score: number | null, total: number | null) => {
@@ -317,7 +327,7 @@ const GradesAllSubjects = () => {
   let tableContent = (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
       <Table2 className="w-12 h-12 text-muted-foreground/40" />
-      <p className="text-sm text-muted-foreground">Sélectionnez un niveau et une filière, puis cliquez sur « Afficher les notes ».</p>
+      <p className="text-sm text-muted-foreground">{t('Sélectionnez un niveau et une filière, puis cliquez sur « Afficher les notes ».')}</p>
     </div>
   );
 
@@ -325,7 +335,7 @@ const GradesAllSubjects = () => {
     tableContent = (
       <div className="flex flex-col items-center justify-center py-12 gap-3">
         <Users className="w-12 h-12 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">Aucune donnée trouvée pour ces critères.</p>
+        <p className="text-sm text-muted-foreground">{t('Aucune donnée trouvée pour ces critères.')}</p>
       </div>
     );
   }
@@ -336,48 +346,61 @@ const GradesAllSubjects = () => {
         <TableHeader>
           <TableRow>
             <TableHead>#</TableHead>
-            <TableHead>Étudiant</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Matière</TableHead>
-            <TableHead>Épreuve</TableHead>
-            <TableHead>Note</TableHead>
-            <TableHead>Statut</TableHead>
+            <TableHead>{t('Matricule')}</TableHead>
+            <TableHead>{t('Étudiant')}</TableHead>
+            <TableHead>{t('Email')}</TableHead>
+            <TableHead>{t('Matière')}</TableHead>
+            <TableHead>{t('Épreuve')}</TableHead>
+            <TableHead>{t('Note')}</TableHead>
+            <TableHead>{t('Décision')}</TableHead>
+            <TableHead>{t('Statut')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredRows.map((r, idx) => (
+          {filteredRows.map((r, idx) => {
+            const note20 = r.score !== null && r.total_points ? (r.score / r.total_points) * 20 : null;
+            return (
             <TableRow key={`${r.student_id}-${r.subject_name}-${idx}`}>
               <TableCell>{idx + 1}</TableCell>
+              <TableCell className="text-muted-foreground text-xs">{r.student_number || '-'}</TableCell>
               <TableCell className="font-medium">{r.full_name}</TableCell>
               <TableCell>{r.email}</TableCell>
               <TableCell>{r.subject_name}</TableCell>
               <TableCell>{r.exam_title}</TableCell>
               <TableCell>{getScoreDisplay(r.score, r.total_points)}</TableCell>
+              <TableCell>
+                {note20 !== null ? (
+                  note20 >= 10
+                    ? <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-0">{t('Validé')}</Badge>
+                    : <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-0">{t('Non validé')}</Badge>
+                ) : <span className="text-muted-foreground">-</span>}
+              </TableCell>
               <TableCell>{getStatusBadge(r.submission_status)}</TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     );
   }
 
   return (
-    <AppLayout title="Notes globales (toutes matières)">
+    <AppLayout title={t('Notes globales (toutes matières)')}>
       <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Table2 className="w-5 h-5 text-primary" />
-              Vue globale des notes
+              {t('Vue globale des notes')}
             </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">Consultez les notes de toutes les matières pour l'ensemble des étudiants d'un niveau et d'une filière, classées par ordre alphabétique.</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("Consultez les notes de toutes les matières pour l'ensemble des étudiants d'un niveau et d'une filière, classées par ordre alphabétique.")}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Niveau</Label>
+                <Label>{t('Niveau')}</Label>
                 <Select value={filters.level_id} onValueChange={(v) => setFilters((p) => ({ ...p, level_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionnez" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('Sélectionnez')} /></SelectTrigger>
                   <SelectContent>
                     {levels.map((item) => (
                       <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -387,9 +410,9 @@ const GradesAllSubjects = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Filière</Label>
+                <Label>{t('Filière')}</Label>
                 <Select value={filters.specialty_id} onValueChange={(v) => setFilters((p) => ({ ...p, specialty_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionnez" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('Sélectionnez')} /></SelectTrigger>
                   <SelectContent>
                     {specialties.map((item) => (
                       <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -400,22 +423,22 @@ const GradesAllSubjects = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Recherche</Label>
+              <Label>{t('Recherche')}</Label>
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Nom, email ou matière"
+                placeholder={t('Nom, email ou matière')}
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Button onClick={fetchGrades} disabled={loading}>
                 <Search className="w-4 h-4 mr-2" />
-                {loading ? 'Chargement...' : 'Afficher les notes'}
+                {loading ? t('Chargement...') : t('Afficher les notes')}
               </Button>
               <Button variant="outline" onClick={exportExcel} disabled={filteredRows.length === 0}>
                 <Download className="w-4 h-4 mr-2" />
-                Exporter en Excel
+                {t('Exporter en Excel')}
               </Button>
             </div>
           </CardContent>
@@ -425,25 +448,25 @@ const GradesAllSubjects = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Étudiants</p>
+                <p className="text-xs text-muted-foreground">{t('Étudiants')}</p>
                 <p className="text-2xl font-semibold">{stats.students}</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Matières</p>
+                <p className="text-xs text-muted-foreground">{t('Matières')}</p>
                 <p className="text-2xl font-semibold">{stats.subjects}</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Lignes exportables</p>
+                <p className="text-xs text-muted-foreground">{t('Lignes exportables')}</p>
                 <p className="text-2xl font-semibold">{stats.lines}</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Copies composées</p>
+                <p className="text-xs text-muted-foreground">{t('Copies composées')}</p>
                 <p className="text-2xl font-semibold">{stats.composed}</p>
               </CardContent>
             </Card>
@@ -454,7 +477,7 @@ const GradesAllSubjects = () => {
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Moyenne générale (sur 20)</p>
+                <p className="text-xs text-muted-foreground">{t('Moyenne générale (sur 20)')}</p>
                 <p className={`text-3xl font-bold ${
                   stats.moyenne >= 14 ? 'text-green-600 dark:text-green-400' :
                   stats.moyenne >= 10 ? 'text-amber-600 dark:text-amber-400' :
@@ -462,7 +485,7 @@ const GradesAllSubjects = () => {
                 }`}>{Math.round(stats.moyenne * 100) / 100}</p>
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                <p>Basée sur {rows.filter(r => r.score !== null && r.total_points).length} copie(s) notée(s)</p>
+                <p>{t('Basée sur')} {rows.filter(r => r.score !== null && r.total_points).length} {t('copie(s) notée(s)')}</p>
               </div>
             </CardContent>
           </Card>
@@ -471,8 +494,8 @@ const GradesAllSubjects = () => {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between">
-              <span>Classement alphabétique — {selectedNames.level} / {selectedNames.specialty}</span>
-              {loaded && <Badge variant="outline" className="ml-2 font-normal">{filteredRows.length} résultat(s)</Badge>}
+              <span>{t('Classement alphabétique')} — {selectedNames.level} / {selectedNames.specialty}</span>
+              {loaded && <Badge variant="outline" className="ml-2 font-normal">{filteredRows.length} {t('résultat(s)')}</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent>{tableContent}</CardContent>

@@ -17,11 +17,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/lib/backendClient';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/useLanguage';
 
 type IdName = { id: string; name: string };
 
 type StudentProfileRef = {
   user_id: string;
+  student_number?: string | null;
 };
 
 type ProfileRef = {
@@ -38,6 +40,7 @@ type StudentRow = {
   student_id: string;
   full_name: string;
   email: string;
+  student_number: string;
   score: number | null;
   total_points: number | null;
   submission_status: string;
@@ -77,6 +80,7 @@ const pickMostRecentSubmission = (items: SubmissionLike[]) => {
 };
 
 const GradesBySubject = () => {
+  const { t } = useLanguage();
   const [levels, setLevels] = useState<IdName[]>([]);
   const [specialties, setSpecialties] = useState<IdName[]>([]);
   const [subjects, setSubjects] = useState<IdName[]>([]);
@@ -138,7 +142,7 @@ const GradesBySubject = () => {
 
   const fetchGrades = async () => {
     if (!filters.level_id || !filters.specialty_id || !filters.subject_id) {
-      toast.error('Sélectionnez niveau, filière et matière');
+      toast.error(t('Sélectionnez niveau, filière et matière'));
       return;
     }
 
@@ -146,13 +150,14 @@ const GradesBySubject = () => {
     try {
       const studentProfilesRes = await supabase
         .from('student_profiles')
-        .select('user_id')
+        .select('user_id, student_number')
         .eq('level_id', filters.level_id)
         .eq('specialty_id', filters.specialty_id);
 
-      const studentIds = ((studentProfilesRes.data || []) as StudentProfileRef[])
-        .map((sp) => sp.user_id)
-        .filter(Boolean);
+      const studentProfiles = (studentProfilesRes.data || []) as StudentProfileRef[];
+      const studentIds = studentProfiles.map((sp) => sp.user_id).filter(Boolean);
+      const matriculeMap = new Map<string, string>();
+      studentProfiles.forEach((sp) => { if (sp.user_id) matriculeMap.set(sp.user_id, sp.student_number || ''); });
 
       if (studentIds.length === 0) {
         setRows([]);
@@ -215,6 +220,7 @@ const GradesBySubject = () => {
             student_id: studentId,
             full_name: profile.full_name || profile.email,
             email: profile.email,
+            student_number: matriculeMap.get(studentId) || '',
             score: best?.score ?? null,
             total_points: best?.exam?.total_points ?? null,
             submission_status: best?.status || 'non_compose',
@@ -228,7 +234,7 @@ const GradesBySubject = () => {
       setLoaded(true);
     } catch (error) {
       console.error(error);
-      toast.error('Erreur lors du chargement des notes');
+      toast.error(t('Erreur lors du chargement des notes'));
     } finally {
       setLoading(false);
     }
@@ -236,42 +242,46 @@ const GradesBySubject = () => {
 
   const exportExcel = () => {
     if (filteredRows.length === 0) {
-      toast.error('Aucune donnée à exporter');
+      toast.error(t('Aucune donnée à exporter'));
       return;
     }
 
     const statusLabels: Record<string, string> = {
-      corrige: 'Validée',
-      corrige_auto: 'Provisoire',
-      soumis: 'Soumis',
-      non_compose: 'Non composé',
+      corrige: t('Validée'),
+      corrige_auto: t('Provisoire'),
+      soumis: t('Soumis'),
+      non_compose: t('Non composé'),
     };
 
     const data = filteredRows.map((r, idx) => ({
-      'N°': idx + 1,
-      'Nom complet': r.full_name,
-      'Email': r.email,
-      'Matière': selectedNames.subject,
-      'Épreuve': r.exam_title,
-      'Note': r.score ?? '',
-      'Barème': r.total_points ?? '',
-      'Note /20': r.score !== null && r.total_points ? Math.round(((r.score / r.total_points) * 20) * 100) / 100 : '',
-      'Statut': statusLabels[r.submission_status] || r.submission_status,
-      'Date de soumission': r.submitted_at ? new Date(r.submitted_at).toLocaleString('fr-FR') : '',
+      [t('N°')]: idx + 1,
+      [t('Matricule')]: r.student_number,
+      [t('Nom complet')]: r.full_name,
+      [t('Email')]: r.email,
+      [t('Matière')]: selectedNames.subject,
+      [t('Épreuve')]: r.exam_title,
+      [t('Note')]: r.score ?? '',
+      [t('Barème')]: r.total_points ?? '',
+      [t('Note /20')]: r.score !== null && r.total_points ? Math.round(((r.score / r.total_points) * 20) * 100) / 100 : '',
+      [t('Décision')]: r.score !== null && r.total_points ? ((r.score / r.total_points) * 20 >= 10 ? t('Validé') : t('Non validé')) : '',
+      [t('Statut')]: statusLabels[r.submission_status] || r.submission_status,
+      [t('Date de soumission')]: r.submitted_at ? new Date(r.submitted_at).toLocaleString('fr-FR') : '',
     }));
 
     if (stats.moyenne !== null) {
       data.push({
-        'N°': '' as any,
-        'Nom complet': '',
-        'Email': '',
-        'Matière': '',
-        'Épreuve': 'MOYENNE CLASSE',
-        'Note': '' as any,
-        'Barème': '' as any,
-        'Note /20': Math.round(stats.moyenne * 100) / 100 as any,
-        'Statut': '',
-        'Date de soumission': '',
+        [t('N°')]: '' as any,
+        [t('Matricule')]: '',
+        [t('Nom complet')]: '',
+        [t('Email')]: '',
+        [t('Matière')]: '',
+        [t('Épreuve')]: t('MOYENNE CLASSE'),
+        [t('Note')]: '' as any,
+        [t('Barème')]: '' as any,
+        [t('Note /20')]: Math.round(stats.moyenne * 100) / 100 as any,
+        [t('Décision')]: '',
+        [t('Statut')]: '',
+        [t('Date de soumission')]: '',
       });
     }
 
@@ -282,10 +292,10 @@ const GradesBySubject = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === 'corrige') return <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-0">Validée</Badge>;
-    if (status === 'corrige_auto') return <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0">Provisoire</Badge>;
-    if (status === 'soumis') return <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">Soumis</Badge>;
-    return <Badge className="bg-muted text-muted-foreground border-0">Non composé</Badge>;
+    if (status === 'corrige') return <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-0">{t('Validée')}</Badge>;
+    if (status === 'corrige_auto') return <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0">{t('Provisoire')}</Badge>;
+    if (status === 'soumis') return <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">{t('Soumis')}</Badge>;
+    return <Badge className="bg-muted text-muted-foreground border-0">{t('Non composé')}</Badge>;
   };
 
   const getScoreDisplay = (score: number | null, total: number | null) => {
@@ -298,7 +308,7 @@ const GradesBySubject = () => {
   let tableContent = (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
       <FileSpreadsheet className="w-12 h-12 text-muted-foreground/40" />
-      <p className="text-sm text-muted-foreground">Sélectionnez un niveau, une filière et une matière, puis cliquez sur « Afficher les notes ».</p>
+      <p className="text-sm text-muted-foreground">{t("Sélectionnez un niveau, une filière et une matière, puis cliquez sur « Afficher les notes ».")}</p>
     </div>
   );
 
@@ -306,7 +316,7 @@ const GradesBySubject = () => {
     tableContent = (
       <div className="flex flex-col items-center justify-center py-12 gap-3">
         <Users className="w-12 h-12 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">Aucune copie trouvée pour ces critères.</p>
+        <p className="text-sm text-muted-foreground">{t('Aucune copie trouvée pour ces critères.')}</p>
       </div>
     );
   }
@@ -317,46 +327,59 @@ const GradesBySubject = () => {
         <TableHeader>
           <TableRow>
             <TableHead>#</TableHead>
-            <TableHead>Étudiant</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Épreuve</TableHead>
-            <TableHead>Note</TableHead>
-            <TableHead>Statut</TableHead>
+            <TableHead>{t('Matricule')}</TableHead>
+            <TableHead>{t('Étudiant')}</TableHead>
+            <TableHead>{t('Email')}</TableHead>
+            <TableHead>{t('Épreuve')}</TableHead>
+            <TableHead>{t('Note')}</TableHead>
+            <TableHead>{t('Décision')}</TableHead>
+            <TableHead>{t('Statut')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredRows.map((r, idx) => (
+          {filteredRows.map((r, idx) => {
+            const note20 = r.score !== null && r.total_points ? (r.score / r.total_points) * 20 : null;
+            return (
             <TableRow key={`${r.student_id}-${idx}`}>
               <TableCell>{idx + 1}</TableCell>
+              <TableCell className="text-muted-foreground text-xs">{r.student_number || '-'}</TableCell>
               <TableCell className="font-medium">{r.full_name}</TableCell>
               <TableCell>{r.email}</TableCell>
               <TableCell>{r.exam_title}</TableCell>
               <TableCell>{getScoreDisplay(r.score, r.total_points)}</TableCell>
+              <TableCell>
+                {note20 !== null ? (
+                  note20 >= 10
+                    ? <Badge className="bg-green-500/15 text-green-600 dark:text-green-400 border-0">{t('Validé')}</Badge>
+                    : <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-0">{t('Non validé')}</Badge>
+                ) : <span className="text-muted-foreground">-</span>}
+              </TableCell>
               <TableCell>{getStatusBadge(r.submission_status)}</TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     );
   }
 
   return (
-    <AppLayout title="Notes par matière">
+    <AppLayout title={t("Notes par matière")}>
       <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-primary" />
-              Consulter les notes d'une matière
+              {t("Consulter les notes d'une matière")}
             </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">Sélectionnez le niveau, la filière et la matière pour afficher les notes de tous les étudiants, classées par ordre alphabétique.</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('Sélectionnez le niveau, la filière et la matière pour afficher les notes de tous les étudiants, classées par ordre alphabétique.')}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-2">
-                <Label>Niveau</Label>
+                <Label>{t('Niveau')}</Label>
                 <Select value={filters.level_id} onValueChange={(v) => setFilters((p) => ({ ...p, level_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionnez" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("Sélectionnez")} /></SelectTrigger>
                   <SelectContent>
                     {levels.map((item) => (
                       <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -366,9 +389,9 @@ const GradesBySubject = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Filière</Label>
+                <Label>{t('Filière')}</Label>
                 <Select value={filters.specialty_id} onValueChange={(v) => setFilters((p) => ({ ...p, specialty_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionnez" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("Sélectionnez")} /></SelectTrigger>
                   <SelectContent>
                     {specialties.map((item) => (
                       <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -378,9 +401,9 @@ const GradesBySubject = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Matière</Label>
+                <Label>{t('Matière')}</Label>
                 <Select value={filters.subject_id} onValueChange={(v) => setFilters((p) => ({ ...p, subject_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionnez" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("Sélectionnez")} /></SelectTrigger>
                   <SelectContent>
                     {subjects.map((item) => (
                       <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -391,22 +414,22 @@ const GradesBySubject = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Recherche étudiant</Label>
+              <Label>{t('Recherche étudiant')}</Label>
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Nom ou email"
+                placeholder={t("Nom ou email")}
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Button onClick={fetchGrades} disabled={loading}>
                 <Search className="w-4 h-4 mr-2" />
-                {loading ? 'Chargement...' : 'Afficher les notes'}
+                {loading ? t('Chargement...') : t('Afficher les notes')}
               </Button>
               <Button variant="outline" onClick={exportExcel} disabled={filteredRows.length === 0}>
                 <Download className="w-4 h-4 mr-2" />
-                Exporter en Excel
+                {t('Exporter en Excel')}
               </Button>
             </div>
           </CardContent>
@@ -416,25 +439,25 @@ const GradesBySubject = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Étudiants listés</p>
+                <p className="text-xs text-muted-foreground">{t('Étudiants listés')}</p>
                 <p className="text-2xl font-semibold">{stats.total}</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Copies composées</p>
+                <p className="text-xs text-muted-foreground">{t('Copies composées')}</p>
                 <p className="text-2xl font-semibold">{stats.composed}</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Notes provisoires</p>
+                <p className="text-xs text-muted-foreground">{t('Notes provisoires')}</p>
                 <p className="text-2xl font-semibold">{stats.provisoires}</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Notes validées</p>
+                <p className="text-xs text-muted-foreground">{t('Notes validées')}</p>
                 <p className="text-2xl font-semibold text-green-600 dark:text-green-400">{stats.validees}</p>
               </CardContent>
             </Card>
@@ -445,7 +468,7 @@ const GradesBySubject = () => {
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Moyenne de classe (sur 20)</p>
+                <p className="text-xs text-muted-foreground">{t('Moyenne de classe (sur 20)')}</p>
                 <p className={`text-3xl font-bold ${
                   stats.moyenne >= 14 ? 'text-green-600 dark:text-green-400' :
                   stats.moyenne >= 10 ? 'text-amber-600 dark:text-amber-400' :
@@ -453,7 +476,7 @@ const GradesBySubject = () => {
                 }`}>{Math.round(stats.moyenne * 100) / 100}</p>
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                <p>Basée sur {rows.filter(r => r.score !== null && r.total_points).length} copie(s) notée(s)</p>
+                <p>{t('Basée sur')} {rows.filter(r => r.score !== null && r.total_points).length} {t('copie(s) notée(s)')}</p>
               </div>
             </CardContent>
           </Card>
@@ -462,8 +485,8 @@ const GradesBySubject = () => {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between">
-              <span>Liste alphabétique — {selectedNames.subject} ({selectedNames.level} / {selectedNames.specialty})</span>
-              {loaded && <Badge variant="outline" className="ml-2 font-normal">{filteredRows.length} résultat(s)</Badge>}
+              <span>{t('Liste alphabétique')} — {selectedNames.subject} ({selectedNames.level} / {selectedNames.specialty})</span>
+              {loaded && <Badge variant="outline" className="ml-2 font-normal">{filteredRows.length} {t('résultat(s)')}</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent>{tableContent}</CardContent>

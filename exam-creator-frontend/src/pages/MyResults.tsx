@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Trophy, Clock, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Trophy, Clock, CheckCircle, XCircle, Eye, TrendingUp } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -45,6 +46,7 @@ interface Answer {
 
 const MyResults = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
@@ -153,21 +155,42 @@ const MyResults = () => {
   const getSubmissionStatusMeta = (status: string | null) => {
     if (status === 'corrige') {
       return {
-        label: 'Validée',
+        label: t('Validée'),
         badgeClass: 'bg-success text-success-foreground',
       };
     }
     if (status === 'corrige_auto') {
       return {
-        label: 'Provisoire',
+        label: t('Provisoire'),
         badgeClass: 'bg-primary text-primary-foreground',
       };
     }
     return {
-      label: 'En attente IA',
+      label: t('En attente IA'),
       badgeClass: 'bg-warning text-warning-foreground',
     };
   };
+
+  // Données pour le graphique d'évolution des notes
+  const chartData = useMemo(() => {
+    return submissions
+      .filter(s => s.score !== null && s.exam?.total_points)
+      .map(s => ({
+        date: s.submitted_at ? new Date(s.submitted_at) : new Date(),
+        percentage: Math.round(((s.score || 0) / (s.exam?.total_points || 1)) * 100),
+        label: s.exam?.title || '',
+        score: s.score || 0,
+        total: s.exam?.total_points || 0,
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [submissions]);
+
+  // Moyenne générale
+  const averageScore = useMemo(() => {
+    if (chartData.length === 0) return 0;
+    const sum = chartData.reduce((acc, d) => acc + d.percentage, 0);
+    return Math.round(sum / chartData.length);
+  }, [chartData]);
 
   if (loading) {
     return (
@@ -190,7 +213,7 @@ const MyResults = () => {
                 <Trophy className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Épreuves passées</p>
+                <p className="text-sm text-muted-foreground">{t('Épreuves passées')}</p>
                 <p className="text-2xl font-bold">{submissions.length}</p>
               </div>
             </CardContent>
@@ -201,7 +224,7 @@ const MyResults = () => {
                 <CheckCircle className="w-6 h-6 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Corrigées</p>
+                <p className="text-sm text-muted-foreground">{t('Corrigées')}</p>
                 <p className="text-2xl font-bold">{submissions.filter(s => s.status === 'corrige').length}</p>
               </div>
             </CardContent>
@@ -212,7 +235,7 @@ const MyResults = () => {
                 <Clock className="w-6 h-6 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Provisoires</p>
+                <p className="text-sm text-muted-foreground">{t('Provisoires')}</p>
                 <p className="text-2xl font-bold">
                   {submissions.filter(s => s.status === 'corrige_auto').length}
                 </p>
@@ -221,11 +244,101 @@ const MyResults = () => {
           </Card>
         </div>
 
+        {/* Graphique d'évolution des notes */}
+        {chartData.length >= 2 && (
+          <Card className="bg-card border-border">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold text-foreground">{t('Évolution des notes')}</h3>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {t('Moyenne')} : <span className={`font-bold ${averageScore >= 50 ? 'text-success' : 'text-destructive'}`}>{averageScore}%</span>
+                </div>
+              </div>
+              <div className="relative w-full" style={{ height: '220px' }}>
+                <svg viewBox="0 0 600 200" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+                  {/* Lignes de grille horizontales */}
+                  {[0, 25, 50, 75, 100].map(v => {
+                    const y = 180 - (v / 100) * 160;
+                    return (
+                      <g key={v}>
+                        <line x1="40" y1={y} x2="580" y2={y} stroke="currentColor" strokeOpacity={0.1} strokeDasharray="4 4" />
+                        <text x="35" y={y + 4} textAnchor="end" className="fill-muted-foreground" fontSize="10">{v}%</text>
+                      </g>
+                    );
+                  })}
+                  {/* Ligne de la moyenne */}
+                  <line
+                    x1="40"
+                    y1={180 - (averageScore / 100) * 160}
+                    x2="580"
+                    y2={180 - (averageScore / 100) * 160}
+                    stroke="hsl(var(--primary))"
+                    strokeOpacity={0.3}
+                    strokeDasharray="6 3"
+                    strokeWidth={1.5}
+                  />
+                  {/* Courbe des notes */}
+                  {chartData.length > 1 && (
+                    <polyline
+                      fill="none"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2.5}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      points={chartData.map((d, i) => {
+                        const x = 40 + (i / (chartData.length - 1)) * 540;
+                        const y = 180 - (d.percentage / 100) * 160;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                    />
+                  )}
+                  {/* Aire sous la courbe */}
+                  {chartData.length > 1 && (
+                    <polygon
+                      fill="hsl(var(--primary))"
+                      fillOpacity={0.08}
+                      points={[
+                        `40,180`,
+                        ...chartData.map((d, i) => {
+                          const x = 40 + (i / (chartData.length - 1)) * 540;
+                          const y = 180 - (d.percentage / 100) * 160;
+                          return `${x},${y}`;
+                        }),
+                        `580,180`,
+                      ].join(' ')}
+                    />
+                  )}
+                  {/* Points + labels */}
+                  {chartData.map((d, i) => {
+                    const x = 40 + (i / (chartData.length - 1)) * 540;
+                    const y = 180 - (d.percentage / 100) * 160;
+                    const color = d.percentage >= 50 ? 'hsl(var(--success, 142 71% 45%))' : 'hsl(var(--destructive))';
+                    return (
+                      <g key={i}>
+                        <circle cx={x} cy={y} r={5} fill={color} stroke="hsl(var(--background))" strokeWidth={2} />
+                        <text x={x} y={y - 10} textAnchor="middle" className="fill-foreground" fontSize="10" fontWeight="bold">
+                          {d.percentage}%
+                        </text>
+                        <text x={x} y={195} textAnchor="middle" className="fill-muted-foreground" fontSize="8">
+                          {d.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Results List */}
         {submissions.length === 0 ? (
           <Card className="bg-card border-border">
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">Aucun résultat disponible</p>
+              <p className="text-muted-foreground">{t('Aucun résultat disponible')}</p>
             </CardContent>
           </Card>
         ) : (
@@ -254,7 +367,7 @@ const MyResults = () => {
                         </span>
                       )}
                       {submission.submitted_at && (
-                        <span>Soumis le {new Date(submission.submitted_at).toLocaleDateString('fr-FR')}</span>
+                        <span>{t('Soumis le')} {new Date(submission.submitted_at).toLocaleDateString('fr-FR')}</span>
                       )}
                     </div>
                   </div>
@@ -276,7 +389,7 @@ const MyResults = () => {
                         title={isExamEnded(submission) ? undefined : "Disponible à la fin de l'épreuve"}
                       >
                         <Eye className="w-4 h-4 mr-2" />
-                        {isExamEnded(submission) ? 'Détails' : 'Détails (verrouillé)'}
+                        {isExamEnded(submission) ? t('Détails') : t('Détails (verrouillé)')}
                       </Button>
                     )}
                   </div>
@@ -292,7 +405,7 @@ const MyResults = () => {
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Détails de la correction - {selectedSubmission?.exam?.title}</DialogTitle>
+            <DialogTitle>{t('Détails de la correction')} - {selectedSubmission?.exam?.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             {selectedSubmission && !isExamEnded(selectedSubmission) ? (

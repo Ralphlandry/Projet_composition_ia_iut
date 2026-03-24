@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Clock, CheckCircle, BookOpen, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { Trophy, Clock, CheckCircle, BookOpen, ChevronRight, Loader2, AlertCircle, FileCheck } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface SubmissionResult {
   id: string;
@@ -37,13 +39,14 @@ interface AnswerDetail {
   } | null;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  soumis: 'En cours de correction',
-  corrige_auto: 'Provisoire',
-  corrige: 'Validée',
-};
+const getStatusLabels = (t: (s: string) => string): Record<string, string> => ({
+  soumis: t('En cours de correction'),
+  corrige_auto: t('Provisoire'),
+  corrige: t('Validée'),
+});
 
 const ExamResult = () => {
+  const { t } = useLanguage();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -54,6 +57,7 @@ const ExamResult = () => {
   const [polling, setPolling] = useState(false);
   const [examEnded, setExamEnded] = useState(false);
   const [timeUntilReveal, setTimeUntilReveal] = useState<string | null>(null);
+  const [waitProgress, setWaitProgress] = useState(0);
 
   const fetchResult = async () => {
     if (!id || !user) return;
@@ -103,6 +107,11 @@ const ExamResult = () => {
       setAnswers((ans as unknown as AnswerDetail[]) || []);
     }
 
+    // Enable polling if still waiting for correction
+    if (sub && (sub as any).status === 'soumis') {
+      setPolling(true);
+    }
+
     setLoading(false);
   };
 
@@ -111,33 +120,38 @@ const ExamResult = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user]);
 
-  // Polling toutes les 10s si la correction n'est pas encore disponible
+  // Barre de progression simulée pendant la correction IA (~3 minutes)
   useEffect(() => {
-    if (!result) return;
-    if (result.status !== 'soumis') {
-      setPolling(false);
-      return;
-    }
-    setPolling(true);
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from('submissions')
-        .select('status, score')
-        .eq('id', id)
-        .single();
-      if (data && data.status !== 'soumis') {
-        clearInterval(interval);
-        setPolling(false);
-        fetchResult();
-      }
-    }, 10000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!result || result.status !== 'soumis') return;
+    setWaitProgress(0);
+    const DURATION_MS = 180_000; // 3 min
+    const start = Date.now();
+    const iv = setInterval(() => {
+      const pct = Math.min(95, ((Date.now() - start) / DURATION_MS) * 100);
+      setWaitProgress(pct);
+    }, 500);
+    return () => clearInterval(iv);
   }, [result?.status]);
+
+  // Polling every 20s (visibility-aware) while correction is pending
+  const pollCorrection = useCallback(async () => {
+    if (!id) return;
+    const { data } = await supabase
+      .from('submissions')
+      .select('status, score')
+      .eq('id', id)
+      .single();
+    if (data && data.status !== 'soumis') {
+      setPolling(false);
+      fetchResult();
+    }
+  }, [id]);
+
+  useVisibilityPolling(pollCorrection, 20000, polling);
 
   if (loading) {
     return (
-      <AppLayout title="Résultat">
+      <AppLayout title={t('Résultat')}>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -147,8 +161,8 @@ const ExamResult = () => {
 
   if (!result) {
     return (
-      <AppLayout title="Résultat">
-        <div className="text-center py-20 text-muted-foreground">Résultat introuvable.</div>
+      <AppLayout title={t('Résultat')}>
+        <div className="text-center py-20 text-muted-foreground">{t('Résultat introuvable.')}</div>
       </AppLayout>
     );
   }
@@ -170,7 +184,7 @@ const ExamResult = () => {
       : 'text-red-600 dark:text-red-400';
 
   return (
-    <AppLayout title="Résultat de l'épreuve">
+    <AppLayout title={t("Résultat de l'épreuve")}>
       <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-20">
 
         {/* Carte principale */}
@@ -186,7 +200,7 @@ const ExamResult = () => {
               )}
             </div>
             <h1 className="text-2xl font-bold text-foreground mb-1">
-              {isValide ? 'Correction validée !' : isProvisoire ? 'Note provisoire' : 'Épreuve soumise'}
+              {isValide ? t('Correction validée !') : isProvisoire ? t('Note provisoire') : t('Épreuve soumise')}
             </h1>
             <p className="text-sm text-muted-foreground">{result.exam?.title}</p>
             {result.exam?.subject && (
@@ -199,12 +213,24 @@ const ExamResult = () => {
           <CardContent className="p-6 space-y-4">
             {/* Score */}
             {isEnCours ? (
-              <div className="text-center py-4">
-                <div className="flex items-center justify-center gap-2 text-muted-foreground mb-2">
-                  {polling && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Correction IA en cours…</span>
+              <div className="text-center py-6 space-y-4">
+                <div className="flex items-center justify-center gap-2 text-primary mb-1">
+                  {polling && <Loader2 className="w-5 h-5 animate-spin" />}
+                  <span className="font-semibold">{t('Correction IA en cours…')}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">La note provisoire apparaîtra ici dans quelques instants.</p>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                  {t("Votre copie a bien été reçue. L'intelligence artificielle analyse vos réponses.")}
+                  {' '}{t('Vous serez notifié(e) dès que la note provisoire est disponible.')}
+                </p>
+                <div className="space-y-1">
+                  <Progress value={waitProgress} className="h-2 rounded-full" />
+                  <p className="text-xs text-muted-foreground">{t('Progression estimée')} : {Math.round(waitProgress)} %</p>
+                </div>
+                <div className="flex justify-center gap-4 text-xs text-muted-foreground pt-2">
+                  <span className="flex items-center gap-1"><FileCheck className="w-3.5 h-3.5 text-green-500" /> {t('Copie reçue')}</span>
+                  <span className="flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> {t('Analyse IA')}</span>
+                  <span className="flex items-center gap-1 opacity-40"><CheckCircle className="w-3.5 h-3.5" /> {t('Validation prof')}</span>
+                </div>
               </div>
             ) : (
               <>
@@ -225,15 +251,15 @@ const ExamResult = () => {
 
             {/* Statut */}
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Statut</span>
+              <span className="text-muted-foreground">{t('Statut')}</span>
               <Badge variant={isValide ? 'default' : 'secondary'}>
-                {STATUS_LABELS[result.status] || result.status}
+                {getStatusLabels(t)[result.status] || result.status}
               </Badge>
             </div>
 
             {result.submitted_at && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Soumis le</span>
+                <span className="text-muted-foreground">{t('Soumis le')}</span>
                 <span className="text-foreground">
                   {new Date(result.submitted_at).toLocaleString('fr-FR')}
                 </span>
@@ -243,28 +269,28 @@ const ExamResult = () => {
             {isProvisoire && (
               <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-700 dark:text-amber-400">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>Cette note est provisoire et générée par l'IA. Elle sera validée par votre enseignant.</span>
+                <span>{t("Cette note est provisoire et générée par l'IA. Le détail par question sera visible après validation de votre enseignant.")}</span>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Détail des réponses */}
-        {answers.length > 0 && !isEnCours && (
+        {/* Détail des réponses — uniquement quand la correction est validée (corrige) */}
+        {answers.length > 0 && !isEnCours && isValide && (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <BookOpen className="w-5 h-5" />
-              Détail des réponses
+              {t('Détail des réponses')}
             </h2>
 
             {!examEnded && (
               <div className="flex items-start gap-2 p-4 bg-secondary border border-border rounded-lg text-sm">
                 <Clock className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" />
                 <div>
-                  <p className="font-medium text-foreground">Réponses masquées</p>
+                  <p className="font-medium text-foreground">{t('Réponses masquées')}</p>
                   <p className="text-muted-foreground">
-                    Le détail des corrections sera visible une fois l'épreuve terminée pour tous les étudiants
-                    {timeUntilReveal ? ` (dans environ ${timeUntilReveal})` : ''}.
+                    {t("Le détail des corrections sera visible une fois l'épreuve terminée pour tous les étudiants")}
+                    {timeUntilReveal ? ` (${t('dans environ')} ${timeUntilReveal})` : ''}.
                   </p>
                 </div>
               </div>
@@ -299,15 +325,15 @@ const ExamResult = () => {
                     </div>
 
                     <div className="text-sm text-muted-foreground">
-                      Votre réponse :{' '}
+                      {t('Votre réponse')} :{' '}
                       <span className="text-foreground">
-                        {answer.answer_text || <em>Pas de réponse</em>}
+                        {answer.answer_text || <em>{t('Pas de réponse')}</em>}
                       </span>
                     </div>
 
                     {!isOpen && answer.question?.correct_answer && (
                       <div className="text-sm text-muted-foreground">
-                        Réponse correcte :{' '}
+                        {t('Réponse correcte')} :{' '}
                         <span className="text-green-600 dark:text-green-400 font-medium">
                           {answer.question.correct_answer}
                         </span>
@@ -333,13 +359,13 @@ const ExamResult = () => {
             className="flex-1"
             onClick={() => navigate('/my-exams')}
           >
-            Mes épreuves
+            {t('Mes épreuves')}
           </Button>
           <Button
             className="flex-1"
             onClick={() => navigate('/my-results')}
           >
-            Tous mes résultats
+            {t('Tous mes résultats')}
             <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         </div>

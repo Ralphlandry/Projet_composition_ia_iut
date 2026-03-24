@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Send, AlertTriangle, Maximize } from 'lucide-react';
+import { Clock, Send, AlertTriangle, Maximize, Shield } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -55,6 +56,7 @@ interface Exam {
 }
 
 const TakeExam = () => {
+  const { t } = useLanguage();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -76,6 +78,8 @@ const TakeExam = () => {
   const networkIncidentsRef = useRef<Array<{ event: string; at: string }>>([]);
   const fullscreenActiveRef = useRef(false);
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Références des cartes de questions pour la navigation par numéro
+  const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Refs stables pour les event listeners (anti-triche + timer)
   const answersRef = useRef<Record<string, string>>({});
@@ -109,12 +113,12 @@ const TakeExam = () => {
         // Avertissement à 5 minutes
         if (next === 300 && !warned5minRef.current) {
           warned5minRef.current = true;
-          toast.warning('Il vous reste 5 minutes !');
+          toast.warning(t('Il vous reste 5 minutes !'));
         }
         // Avertissement à 1 minute
         if (next === 60 && !warned1minRef.current) {
           warned1minRef.current = true;
-          toast.error('Plus qu\'une minute ! Soumettez vos réponses.', { duration: 15000 });
+          toast.error(t('Plus qu\'une minute ! Soumettez vos réponses.'), { duration: 15000 });
         }
 
         if (next <= 0) {
@@ -180,7 +184,7 @@ const TakeExam = () => {
       const now = new Date();
       if (examData.start_date && now < new Date(examData.start_date)) {
         const start = new Date(examData.start_date).toLocaleString('fr-FR');
-        toast.error(`Cette épreuve n'est pas encore ouverte. Elle commence le ${start}`);
+        toast.error(t("Cette épreuve n'est pas encore ouverte. Elle commence le") + ` ${start}`);
         navigate('/my-exams');
         return;
       }
@@ -203,7 +207,7 @@ const TakeExam = () => {
             submitted_at: new Date().toISOString(),
           });
         }
-        toast.error('Le délai de cette épreuve est dépassé. Vous ne pouvez plus composer.');
+        toast.error(t('Le délai de cette épreuve est dépassé. Vous ne pouvez plus composer.'));
         navigate('/my-exams');
         return;
       }
@@ -260,7 +264,7 @@ const TakeExam = () => {
           .maybeSingle();
 
         if (submittedData) {
-          toast.info('Vous avez déjà soumis cette épreuve');
+          toast.info(t('Vous avez déjà soumis cette épreuve'));
           navigate('/my-exams');
           return;
         }
@@ -325,9 +329,9 @@ const TakeExam = () => {
       if (Object.keys(localDraft).length > 0) {
         Object.assign(savedAnswers, localDraft);
         const whenStr = new Date(localSavedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        toast.info(`Réponses restaurées depuis votre appareil (sauvegarde de ${whenStr}).`, { duration: 6000 });
+        toast.info(t('Réponses restaurées depuis votre appareil (sauvegarde de') + ` ${whenStr}).`, { duration: 6000 });
       } else if (Object.keys(dbAnswers).length > 0) {
-        toast.info('Réponses précédentes rechargées.', { duration: 3000 });
+        toast.info(t('Réponses précédentes rechargées.'), { duration: 3000 });
       }
 
       if (Object.keys(savedAnswers).length > 0) {
@@ -336,7 +340,7 @@ const TakeExam = () => {
       }
     } catch (error) {
       console.error('Error fetching exam:', error);
-      toast.error('Erreur lors du chargement de l\'épreuve');
+      toast.error(t("Erreur lors du chargement de l'épreuve"));
       navigate('/my-exams');
     } finally {
       setLoading(false);
@@ -409,7 +413,7 @@ const TakeExam = () => {
       setIsOnline(true);
       logIncident('reconnexion');
       toast.success(
-        '⚠️ Changement de réseau détecté et enregistré dans votre copie. Synchronisation en cours…',
+        '\u26a0\ufe0f ' + t('Changement de réseau détecté et enregistré dans votre copie. Synchronisation en cours\u2026'),
         { duration: 6000 }
       );
       // Sauvegarder immédiatement en DB dès le retour du réseau
@@ -419,7 +423,7 @@ const TakeExam = () => {
       setIsOnline(false);
       logIncident('déconnexion');
       toast.warning(
-        '⚠️ Déconnexion enregistrée — vos réponses sont sauvegardées localement.',
+        '\u26a0\ufe0f ' + t('Déconnexion enregistrée \u2014 vos réponses sont sauvegardées localement.'),
         { duration: 8000 }
       );
     };
@@ -471,9 +475,9 @@ const TakeExam = () => {
       if (updateError) throw updateError;
 
       if (isAutoSubmit) {
-        toast.warning('Épreuve soumise automatiquement — navigation externe détectée');
+        toast.warning(t('Épreuve soumise automatiquement — navigation externe détectée'));
       } else {
-        toast.success('Épreuve soumise avec succès. Correction IA en cours...');
+        toast.success(t('Épreuve soumise avec succès. Correction IA en cours...'));
       }
 
       // Déclencher la correction IA en arrière-plan (fire-and-forget)
@@ -501,7 +505,7 @@ const TakeExam = () => {
         }).catch(() => {});
       }    } catch (error) {
       console.error('Error submitting exam:', error);
-      toast.error('Erreur lors de la soumission');
+      toast.error(t('Erreur lors de la soumission'));
       submittingRef.current = false;
       setSubmitting(false);
     } finally {
@@ -545,7 +549,7 @@ const TakeExam = () => {
           mobileAbsenceTimer = setTimeout(() => {
             performSubmitRef.current?.(true);
           }, 15000);
-          toast.warning('⚠️ Sortie détectée — soumission automatique dans 15s si vous ne revenez pas.', { duration: 8000 });
+          toast.warning(t('⚠️ Sortie détectée — soumission automatique dans 15s si vous ne revenez pas.'), { duration: 8000 });
         } else {
           // Sur desktop : soumission automatique immédiate
           performSubmit(true);
@@ -558,7 +562,7 @@ const TakeExam = () => {
           const entry = { event: 'retour_application', at: new Date().toISOString() };
           networkIncidentsRef.current = [...networkIncidentsRef.current, entry];
           setNetworkIncidentCount(c => c + 1);
-          toast.info('Retour détecté — soumission automatique annulée.', { duration: 4000 });
+          toast.info(t('Retour détecté — soumission automatique annulée.'), { duration: 4000 });
         } else if (isMobile) {
           // Retour après soumission déjà déclenchée ou sans timer actif
           const entry = { event: 'retour_application', at: new Date().toISOString() };
@@ -596,6 +600,68 @@ const TakeExam = () => {
     };
   }, [submission]);
 
+  // Anti-triche : bloquer capture d'écran, DevTools, copier, clic droit
+  useEffect(() => {
+    if (!submission) return;
+
+    const logIncident = (event: string) => {
+      const entry = { event, at: new Date().toISOString() };
+      networkIncidentsRef.current = [...networkIncidentsRef.current, entry];
+      setNetworkIncidentCount(c => c + 1);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Bloquer PrintScreen
+      if (e.key === 'PrintScreen') {
+        e.preventDefault();
+        logIncident('capture_ecran_tentative');
+        toast.error(t('Les captures d\'écran sont interdites pendant l\'épreuve.'), { duration: 4000 });
+        return;
+      }
+      // Bloquer F12 (DevTools)
+      if (e.key === 'F12') {
+        e.preventDefault();
+        logIncident('devtools_tentative');
+        toast.error(t('L\'utilisation des outils de développement est interdite.'), { duration: 4000 });
+        return;
+      }
+      // Bloquer Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C (DevTools)
+      if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+        e.preventDefault();
+        logIncident('devtools_tentative');
+        return;
+      }
+      // Bloquer Ctrl+U (voir source)
+      if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+        logIncident('voir_source_tentative');
+        return;
+      }
+    };
+
+    // Bloquer le clic droit
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      logIncident('clic_droit_tentative');
+    };
+
+    // Bloquer la copie du contenu
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      logIncident('copie_tentative');
+      toast.warning(t('La copie est désactivée pendant l\'épreuve.'), { duration: 3000 });
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopy);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopy);
+    };
+  }, [submission]);
+
   // Affiche l'avertissement plein écran dès que la session est prête
   useEffect(() => {
     if (submission && !loading) {
@@ -623,7 +689,7 @@ const TakeExam = () => {
 
   if (loading) {
     return (
-      <AppLayout title="Épreuve">
+      <AppLayout title={t('Épreuve')}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
         </div>
@@ -633,9 +699,9 @@ const TakeExam = () => {
 
   if (!exam) {
     return (
-      <AppLayout title="Épreuve">
+      <AppLayout title={t('Épreuve')}>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Épreuve non trouvée</p>
+          <p className="text-muted-foreground">{t('Épreuve non trouvée')}</p>
         </div>
       </AppLayout>
     );
@@ -654,14 +720,14 @@ const TakeExam = () => {
         {/* Bannière hors-ligne */}
         {!isOnline && (
           <div className="sticky top-0 z-20 bg-destructive text-destructive-foreground text-center text-sm font-medium py-2 px-4">
-            ⚠️ Connexion perdue — vos réponses sont sauvegardées localement. Ne fermez pas cet onglet.
+            ⚠️ {t('Connexion perdue — vos réponses sont sauvegardées localement. Ne fermez pas cet onglet.')}
           </div>
         )}
 
         {/* Bannière incidents réseau — dissuasion */}
         {isOnline && networkIncidentCount > 0 && (
           <div className="sticky top-0 z-20 bg-orange-500 text-white text-center text-sm font-medium py-2 px-4">
-            ⚠️ {networkIncidentCount} changement{networkIncidentCount > 1 ? 's' : ''} de réseau détecté{networkIncidentCount > 1 ? 's' : ''} — enregistré{networkIncidentCount > 1 ? 's' : ''} et transmis à votre enseignant.
+            ⚠️ {networkIncidentCount} {t('changement')}{networkIncidentCount > 1 ? 's' : ''} {t('de réseau détecté')}{networkIncidentCount > 1 ? 's' : ''} — {t('enregistré')}{networkIncidentCount > 1 ? 's' : ''} {t('et transmis à votre enseignant.')} 
           </div>
         )}
 
@@ -675,11 +741,11 @@ const TakeExam = () => {
               </span>
             </div>
             <div className="text-xs md:text-sm text-muted-foreground text-center">
-              <span className="hidden sm:inline">{answeredCount}/{totalQuestions} questions répondues</span>
+              <span className="hidden sm:inline">{answeredCount}/{totalQuestions} {t('questions répondues')}</span>
               <span className="sm:hidden">{answeredCount}/{totalQuestions}</span>
               {lastSaved && (
                 <span className="block text-xs text-green-600 dark:text-green-400">
-                  ✓ Sauvegardé {lastSaved.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  ✓ {t('Sauvegardé')} {lastSaved.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
             </div>
@@ -688,21 +754,44 @@ const TakeExam = () => {
               disabled={submitting || !isOnline}
               size="sm"
               className="gradient-primary flex-shrink-0"
-              title={!isOnline ? 'Connexion requise pour soumettre' : undefined}
+              title={!isOnline ? t('Connexion requise pour soumettre') : undefined}
             >
               <Send className="w-4 h-4 md:mr-2" />
-              <span className="hidden md:inline">{isOnline ? 'Soumettre' : 'Hors-ligne…'}</span>
+              <span className="hidden md:inline">{isOnline ? t('Soumettre') : t('Hors-ligne…')}</span>
             </Button>
             {!isFullscreen && (
               <button
                 onClick={enterFullscreen}
-                title="Passer en plein écran"
+                title={t('Passer en plein écran')}
                 className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
               >
                 <Maximize className="w-4 h-4" />
               </button>
             )}
           </div>
+
+          {/* Grille de navigation par questions (colorée) */}
+          {totalQuestions > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50">
+              {questions.map((eq, index) => {
+                const answered = !!(answers[eq.question_id]?.trim());
+                return (
+                  <button
+                    key={eq.id}
+                    onClick={() => scrollToQuestion(index)}
+                    title={`${t('Question')} ${index + 1}${answered ? ' — ' + t('répondue') : ' — ' + t('sans réponse')}`}
+                    className={`w-7 h-7 text-xs rounded font-semibold transition-colors ${
+                      answered
+                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                        : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Questions */}
@@ -733,8 +822,7 @@ const TakeExam = () => {
                       </CardContent>
                     </Card>
                   )}
-
-                  <Card className="bg-card border-border">
+                  <div ref={el => { questionRefs.current[index] = el; }}>                  <Card className="bg-card border-border">
                     <CardHeader>
                       <CardTitle className="text-sm md:text-base flex items-start gap-2">
                         <span className="text-primary font-mono shrink-0">Q{index + 1}.</span>
@@ -768,18 +856,18 @@ const TakeExam = () => {
                         >
                           <div className="flex items-center space-x-3 py-3 md:py-2 min-h-[44px]">
                             <RadioGroupItem value="Vrai" id={`${eq.id}-vrai`} className="w-5 h-5 md:w-4 md:h-4" />
-                            <Label htmlFor={`${eq.id}-vrai`} className="cursor-pointer text-sm md:text-base">Vrai</Label>
+                            <Label htmlFor={`${eq.id}-vrai`} className="cursor-pointer text-sm md:text-base">{t('Vrai')}</Label>
                           </div>
                           <div className="flex items-center space-x-3 py-3 md:py-2 min-h-[44px]">
                             <RadioGroupItem value="Faux" id={`${eq.id}-faux`} className="w-5 h-5 md:w-4 md:h-4" />
-                            <Label htmlFor={`${eq.id}-faux`} className="cursor-pointer text-sm md:text-base">Faux</Label>
+                            <Label htmlFor={`${eq.id}-faux`} className="cursor-pointer text-sm md:text-base">{t('Faux')}</Label>
                           </div>
                         </RadioGroup>
                       )}
 
                       {(eq.question.question_type === 'reponse_courte' || eq.question.question_type === 'redaction') && (
                         <Textarea
-                          placeholder="Votre réponse..."
+                          placeholder={t('Votre réponse...')}
                           value={answers[eq.question_id] || ''}
                           onChange={(e) => handleAnswerChange(eq.question_id, e.target.value)}
                           rows={eq.question.question_type === 'redaction' ? 6 : 3}
@@ -788,6 +876,7 @@ const TakeExam = () => {
                       )}
                     </CardContent>
                   </Card>
+                  </div>{/* fin ref question */}
                 </div>
               );
             });
@@ -802,7 +891,7 @@ const TakeExam = () => {
             className="w-full gradient-primary py-6 text-base"
           >
             <Send className="w-5 h-5 mr-2" />
-            Soumettre l'épreuve ({answeredCount}/{totalQuestions} réponses)
+            {t("Soumettre l'épreuve")} ({answeredCount}/{totalQuestions} {t('réponses')})
           </Button>
         </div>
       </div>
@@ -813,18 +902,18 @@ const TakeExam = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <Clock className="w-5 h-5" />
-              Temps écoulé !
+              {t('Temps écoulé !')}
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
               <span className="block text-base">
-                Le temps imparti est écoulé. Votre épreuve va être soumise automatiquement avec les réponses déjà saisies.
+                {t("Le temps imparti est écoulé. Votre épreuve va être soumise automatiquement avec les réponses déjà saisies.")}
               </span>
               <span className="block text-center">
                 <span className="text-4xl font-mono font-bold text-destructive">{timeExpiredCountdown}</span>
-                <span className="text-sm text-muted-foreground block mt-1">secondes avant soumission automatique</span>
+                <span className="text-sm text-muted-foreground block mt-1">{t('secondes avant soumission automatique')}</span>
               </span>
               <span className="block text-sm text-muted-foreground">
-                Questions répondues : <strong>{answeredCount}/{totalQuestions}</strong>
+                {t('Questions répondues')} : <strong>{answeredCount}/{totalQuestions}</strong>
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -835,7 +924,7 @@ const TakeExam = () => {
               disabled={submitting}
             >
               <Send className="w-4 h-4 mr-2" />
-              {submitting ? 'Soumission...' : 'Soumettre maintenant'}
+              {submitting ? t('Soumission...') : t('Soumettre maintenant')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -847,25 +936,29 @@ const TakeExam = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Maximize className="w-5 h-5 text-primary" />
-              {isMobile ? 'Consignes de l\'examen' : 'Mode plein écran requis'}
+              {isMobile ? t("Consignes de l'examen") : t('Mode plein écran requis')}
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               {isMobile ? (
                 <>
-                  <span className="block">Vous êtes sur un appareil mobile. Le plein écran n'est pas disponible sur ce type d'appareil.</span>
-                  <span className="block text-destructive font-medium">Ne quittez pas l'application pendant l'épreuve. Tout changement d'application sera enregistré et signalé à votre enseignant.</span>
+                  <span className="block">{t("Vous êtes sur un appareil mobile. Le plein écran n'est pas disponible sur ce type d'appareil.")}</span>
+                  <span className="block text-destructive font-medium">{t("Ne quittez pas l'application pendant l'épreuve. Tout changement d'application sera enregistré et signalé à votre enseignant.")}</span>
                 </>
               ) : (
                 <>
-                  <span className="block">Pour garantir l'intégrité de l'épreuve, la composition se déroule en <strong>plein écran obligatoire</strong>.</span>
-                  <span className="block text-destructive font-medium">Si vous quittez le plein écran ou changez d'onglet, votre épreuve sera soumise automatiquement avec les réponses déjà saisies.</span>
+                  <span className="block">{t("Pour garantir l'intégrité de l'épreuve, la composition se déroule en")} <strong>{t('plein écran obligatoire')}</strong>.</span>
+                  <span className="block text-destructive font-medium">{t("Si vous quittez le plein écran ou changez d'onglet, votre épreuve sera soumise automatiquement avec les réponses déjà saisies.")}</span>
+                  <span className="block mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                    <Shield className="w-3 h-3 inline" />
+                    {t('Protections actives : captures d\'écran, copie, clic droit et outils de développement sont bloqués.')}
+                  </span>
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction onClick={enterFullscreen}>
-              {isMobile ? 'J\'ai compris, commencer' : 'Commencer en plein écran'}
+              {isMobile ? t("J'ai compris, commencer") : t('Commencer en plein écran')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -877,21 +970,21 @@ const TakeExam = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
-              Confirmer la soumission
+              {t('Confirmer la soumission')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Vous avez répondu à {answeredCount} questions sur {totalQuestions}.
+              {t('Vous avez répondu à')} {answeredCount} {t('questions sur')} {totalQuestions}.
               {answeredCount < totalQuestions && (
-                <span className="text-warning"> Attention: vous n'avez pas répondu à toutes les questions.</span>
+                <span className="text-warning"> {t("Attention: vous n'avez pas répondu à toutes les questions.")}</span>
               )}
               <br />
-              Une fois soumise, vous ne pourrez plus modifier vos réponses.
+              {t('Une fois soumise, vous ne pourrez plus modifier vos réponses.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>{t('Annuler')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Soumission...' : 'Confirmer'}
+              {submitting ? t('Soumission...') : t('Confirmer')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Users, ChevronRight, MoreVertical, Edit, Trash2, UserPlus } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { toast } from 'sonner';
 
 interface Level {
@@ -43,6 +45,7 @@ interface Class {
 
 const Classes = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [classes, setClasses] = useState<Class[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +91,7 @@ const Classes = () => {
 
   const createClass = async () => {
     if (!newClass.name.trim()) {
-      toast.error('Veuillez entrer un nom');
+      toast.error(t('Veuillez entrer un nom'));
       return;
     }
 
@@ -99,59 +102,61 @@ const Classes = () => {
     });
 
     if (error) {
-      toast.error('Erreur lors de la création');
+      toast.error(t('Erreur lors de la création'));
     } else {
-      toast.success('Classe créée');
+      toast.success(t('Classe créée'));
       setShowDialog(false);
       setNewClass({ name: '', level_id: '' });
       fetchClasses();
     }
   };
 
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const deleteClass = async (id: string) => {
     const { error } = await supabase.from('classes').delete().eq('id', id);
     if (error) {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('Erreur lors de la suppression'));
     } else {
-      toast.success('Classe supprimée');
+      toast.success(t('Classe supprimée'));
       fetchClasses();
     }
   };
 
   return (
-    <AppLayout title="Classes">
+    <AppLayout title={t('Classes')}>
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <p className="text-muted-foreground">Gérez vos classes et étudiants</p>
+          <p className="text-muted-foreground">{t('Gérez vos classes et étudiants')}</p>
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
               <Button className="gradient-primary">
                 <Plus className="w-4 h-4 mr-2" />
-                Nouvelle classe
+                {t('Nouvelle classe')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Créer une classe</DialogTitle>
+                <DialogTitle>{t('Créer une classe')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Nom de la classe</Label>
+                  <Label>{t('Nom de la classe')}</Label>
                   <Input
-                    placeholder="Ex: BUT GEA - Groupe A"
+                    placeholder={t('Ex: BUT GEA - Groupe A')}
                     value={newClass.name}
                     onChange={(e) => setNewClass({ ...newClass, name: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Niveau</Label>
+                  <Label>{t('Niveau')}</Label>
                   <Select
                     value={newClass.level_id}
                     onValueChange={(value) => setNewClass({ ...newClass, level_id: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez" />
+                      <SelectValue placeholder={t('Sélectionnez')} />
                     </SelectTrigger>
                     <SelectContent>
                       {levels.map((level) => (
@@ -163,7 +168,7 @@ const Classes = () => {
                   </Select>
                 </div>
                 <Button onClick={createClass} className="w-full gradient-primary">
-                  Créer
+                  {t('Créer')}
                 </Button>
               </div>
             </DialogContent>
@@ -174,11 +179,11 @@ const Classes = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
-              Chargement...
+              {t('Chargement...')}
             </div>
           ) : classes.length === 0 ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
-              Aucune classe créée
+              {t('Aucune classe créée')}
             </div>
           ) : (
             classes.map((cls) => (
@@ -197,29 +202,29 @@ const Classes = () => {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>
                           <UserPlus className="w-4 h-4 mr-2" />
-                          Ajouter des étudiants
+                          {t('Ajouter des étudiants')}
                         </DropdownMenuItem>
                         <DropdownMenuItem>
                           <Edit className="w-4 h-4 mr-2" />
-                          Modifier
+                          {t('Modifier')}
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           className="text-destructive"
-                          onClick={() => deleteClass(cls.id)}
+                          onClick={() => setDeleteId(cls.id)}
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
-                          Supprimer
+                          {t('Supprimer')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                   <h3 className="font-semibold text-foreground">{cls.name}</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    {cls.level?.name || 'Non défini'}
+                    {cls.level?.name || t('Non défini')}
                   </p>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">
-                      {cls.student_count} étudiant{(cls.student_count || 0) > 1 ? 's' : ''}
+                      {cls.student_count} {(cls.student_count || 0) > 1 ? t('étudiants') : t('étudiant')}
                     </span>
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </div>
@@ -229,6 +234,13 @@ const Classes = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={() => { if (deleteId) { deleteClass(deleteId); setDeleteId(null); } }}
+        description={t('Êtes-vous sûr de vouloir supprimer cette classe ?')}
+      />
     </AppLayout>
   );
 };

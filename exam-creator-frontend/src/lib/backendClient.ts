@@ -53,6 +53,18 @@ export type AdminUser = {
   } | null;
 };
 
+export type AuditLogEntry = {
+  id: string;
+  user_id: string | null;
+  user_email: string | null;
+  action: 'insert' | 'update' | 'delete';
+  table_name: string;
+  row_id: string | null;
+  changes: string | null;
+  ip_address: string | null;
+  created_at: string | null;
+};
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 const TOKEN_KEY = 'exam_backend_token';
 const USER_KEY = 'exam_backend_user';
@@ -367,6 +379,34 @@ export const supabase = {
         return { data: null, error: { message: result.error.message } };
       }
       return { data: result.data, error: null };
+    },
+
+    async adminResetPassword(userId: string, newPassword: string) {
+      const result = await apiCall('/api/auth/admin/reset-password', 'POST', { user_id: userId, new_password: newPassword });
+      if (result.error) {
+        return { data: null, error: { message: result.error.message } };
+      }
+      return { data: result.data, error: null };
+    },
+
+    async adminDisableUser(userId: string, disabled: boolean) {
+      const result = await apiCall('/api/auth/admin/disable-user', 'POST', { user_id: userId, disabled });
+      if (result.error) {
+        return { data: null, error: { message: result.error.message } };
+      }
+      return { data: result.data, error: null };
+    },
+
+    async adminGetAuditLogs(params: { limit?: number; offset?: number; table_name?: string } = {}) {
+      const qs = new URLSearchParams();
+      if (params.limit !== undefined) qs.set('limit', String(params.limit));
+      if (params.offset !== undefined) qs.set('offset', String(params.offset));
+      if (params.table_name) qs.set('table_name', params.table_name);
+      const result = await apiCall(`/api/auth/audit-logs?${qs.toString()}`, 'GET');
+      if (result.error) {
+        return { data: null, error: { message: result.error.message } };
+      }
+      return { data: result.data as { total: number; logs: AuditLogEntry[] }, error: null };
     },
   },
 };

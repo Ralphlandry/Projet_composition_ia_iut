@@ -10,39 +10,43 @@ import {
   GraduationCap,
   UserCog,
   Bell,
+  Shield,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const Sidebar = () => {
   const { isProfesseur, isAdmin, user, signOut } = useAuth();
+  const { t } = useLanguage();
 
   const professorNavItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de Bord' },
-    { to: '/exams', icon: FileText, label: 'Epreuves' },
-    { to: '/grades/subject', icon: ClipboardCheck, label: 'Notes par matiere' },
-    { to: '/grades/all-subjects', icon: Table2, label: 'Notes toutes matieres' },
-    { to: '/analytics', icon: BarChart3, label: 'Rapports' },
+    { to: '/dashboard', icon: LayoutDashboard, label: t('Tableau de Bord') },
+    { to: '/exams', icon: FileText, label: t('Epreuves') },
+    { to: '/grades/subject', icon: ClipboardCheck, label: t('Notes par matiere') },
+    { to: '/grades/all-subjects', icon: Table2, label: t('Notes toutes matieres') },
+    { to: '/analytics', icon: BarChart3, label: t('Rapports') },
   ];
 
   const studentNavItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Accueil' },
-    { to: '/my-exams', icon: FileText, label: 'Mes Epreuves' },
-    { to: '/my-results', icon: BarChart3, label: 'Mes Resultats' },
+    { to: '/dashboard', icon: LayoutDashboard, label: t('Accueil') },
+    { to: '/my-exams', icon: FileText, label: t('Mes Epreuves') },
+    { to: '/my-results', icon: BarChart3, label: t('Mes Resultats') },
   ];
 
   const adminNavItems = [
-    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Tableau de Bord' },
-    { to: '/admin/users', icon: UserCog, label: 'Utilisateurs' },
-    { to: '/admin/filieres', icon: BookOpen, label: 'Filieres' },
-    { to: '/admin/subjects', icon: BookOpen, label: 'Matieres' },
-    { to: '/admin/levels', icon: GraduationCap, label: 'Niveaux' },
-    { to: '/admin/notifications', icon: Bell, label: 'Notifications' },
+    { to: '/admin/dashboard', icon: LayoutDashboard, label: t('Tableau de Bord') },
+    { to: '/admin/users', icon: UserCog, label: t('Utilisateurs') },
+    { to: '/admin/filieres', icon: BookOpen, label: t('Filieres') },
+    { to: '/admin/subjects', icon: BookOpen, label: t('Matieres') },
+    { to: '/admin/levels', icon: GraduationCap, label: t('Niveaux') },
+    { to: '/admin/notifications', icon: Bell, label: t('Notifications') },
+    { to: '/admin/audit-logs', icon: Shield, label: t('Journal d\'audit') },
   ];
 
   const commonNavItems = [
-    { to: '/settings', icon: Settings, label: 'Parametres' },
+    { to: '/settings', icon: Settings, label: t('Parametres') },
   ];
 
   const navItems = isAdmin ? [] : isProfesseur ? professorNavItems : studentNavItems;
@@ -56,11 +60,11 @@ const Sidebar = () => {
     <aside className="hidden md:flex md:w-[260px] md:flex-col md:fixed md:inset-y-0 overflow-hidden sidebar-bg">
       <div className="flex flex-col h-full">
         {/* Logo */}
-        <div className="flex items-center justify-center h-16 flex-shrink-0 border-b sidebar-border">
+        <div className="flex items-center justify-center h-20 flex-shrink-0 border-b sidebar-border py-2">
           <img
             src="/logo-(1).png"
             alt="EvalPro"
-            className="h-8 w-auto object-contain"
+            className="h-14 w-auto object-contain"
           />
         </div>
 
@@ -69,7 +73,7 @@ const Sidebar = () => {
           {navItems.length > 0 && (
           <div>
             <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-              Navigation
+              {t('Navigation')}
             </p>
             <div className="space-y-0.5">
               {navItems.map(({ to, icon: Icon, label }) => (
@@ -96,7 +100,7 @@ const Sidebar = () => {
           {isAdmin && (
             <div>
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                Administration
+                {t('Administration')}
               </p>
               <div className="space-y-0.5">
                 {adminNavItems.map(({ to, icon: Icon, label }) => (
@@ -122,7 +126,7 @@ const Sidebar = () => {
 
           <div>
             <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-              Compte
+              {t('Compte')}
             </p>
             <div className="space-y-0.5">
               {commonNavItems.map(({ to, icon: Icon, label }) => (
@@ -158,7 +162,7 @@ const Sidebar = () => {
             <button
               onClick={signOut}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex-shrink-0"
-              title="Deconnexion"
+              title={t('Deconnexion')}
             >
               <LogOut className="w-4 h-4" />
             </button>

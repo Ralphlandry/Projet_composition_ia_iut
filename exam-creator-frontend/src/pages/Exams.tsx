@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Filter, ChevronRight, MoreVertical, Edit, Trash2, Eye } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/lib/backendClient';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Subject {
   id: string;
@@ -47,12 +49,14 @@ interface Exam {
 }
 
 const Exams = () => {
+  const { t } = useLanguage();
   const [exams, setExams] = useState<Exam[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchExams();
@@ -108,13 +112,13 @@ const Exams = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'publie':
-        return <Badge className="bg-success/20 text-success border-0">Publié</Badge>;
+        return <Badge className="bg-success/20 text-success border-0">{t('Publié')}</Badge>;
       case 'brouillon':
-        return <Badge className="bg-warning/20 text-warning border-0">Brouillon</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-0">{t('Brouillon')}</Badge>;
       case 'corrige':
-        return <Badge className="bg-primary/20 text-primary border-0">Corrigé</Badge>;
+        return <Badge className="bg-primary/20 text-primary border-0">{t('Corrigé')}</Badge>;
       case 'archive':
-        return <Badge className="bg-muted text-muted-foreground border-0">Archivé</Badge>;
+        return <Badge className="bg-muted text-muted-foreground border-0">{t('Archivé')}</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -128,7 +132,7 @@ const Exams = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher une épreuve..."
+              placeholder={t('Rechercher une épreuve...')}
               className="pl-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -137,10 +141,10 @@ const Exams = () => {
           <div className="flex gap-2">
             <Select value={filterSubject} onValueChange={setFilterSubject}>
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Matière" />
+                <SelectValue placeholder={t('Matière')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes les matières</SelectItem>
+                <SelectItem value="all">{t('Toutes les matières')}</SelectItem>
                 {subjects.map((subject) => (
                   <SelectItem key={subject.id} value={subject.id}>
                     {subject.name}
@@ -150,14 +154,14 @@ const Exams = () => {
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Statut" />
+                <SelectValue placeholder={t('Statut')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
-                <SelectItem value="brouillon">Brouillon</SelectItem>
-                <SelectItem value="publie">Publié</SelectItem>
-                <SelectItem value="corrige">Corrigé</SelectItem>
-                <SelectItem value="archive">Archivé</SelectItem>
+                <SelectItem value="all">{t('Tous')}</SelectItem>
+                <SelectItem value="brouillon">{t('Brouillon')}</SelectItem>
+                <SelectItem value="publie">{t('Publié')}</SelectItem>
+                <SelectItem value="corrige">{t('Corrigé')}</SelectItem>
+                <SelectItem value="archive">{t('Archivé')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -166,14 +170,14 @@ const Exams = () => {
         {/* Exams List */}
         <div className="space-y-3">
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Chargement...</div>
+            <div className="text-center py-12 text-muted-foreground">{t('Chargement...')}</div>
           ) : filteredExams.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">Aucune épreuve trouvée</p>
+              <p className="text-muted-foreground mb-4">{t('Aucune épreuve trouvée')}</p>
               <Link to="/exams/create">
                 <Button className="gradient-primary">
                   <Plus className="w-4 h-4 mr-2" />
-                  Créer une épreuve
+                  {t('Créer une épreuve')}
                 </Button>
               </Link>
             </div>
@@ -195,10 +199,10 @@ const Exams = () => {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground truncate">{exam.title}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {exam.level?.name} - {exam.specialty?.name || 'Filière non définie'} - {exam.subject?.name}
+                          {exam.level?.name} - {exam.specialty?.name || t('Filière non définie')} - {exam.subject?.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {(exam.evaluation_type || 'Type non défini').replaceAll('_', ' ')} · {exam.semester || 'Semestre non défini'}
+                          {(exam.evaluation_type || t('Type non défini')).replaceAll('_', ' ')} · {exam.semester || t('Semestre non défini')}
                         </p>
                       </div>
                       {getStatusBadge(exam.status)}
@@ -213,21 +217,21 @@ const Exams = () => {
                         <DropdownMenuItem asChild>
                           <Link to={`/exams/${exam.id}/submissions`} className="flex items-center">
                             <Eye className="w-4 h-4 mr-2" />
-                            Voir les soumissions
+                            {t('Voir les soumissions')}
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <Link to={`/exams/${exam.id}/edit`} className="flex items-center">
                             <Edit className="w-4 h-4 mr-2" />
-                            Modifier
+                            {t('Modifier')}
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           className="text-destructive"
-                          onClick={() => deleteExam(exam.id)}
+                          onClick={() => setDeleteId(exam.id)}
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
-                          Supprimer
+                          {t('Supprimer')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -237,6 +241,13 @@ const Exams = () => {
             ))
           )}
         </div>
+
+        <ConfirmDeleteDialog
+          open={!!deleteId}
+          onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+          onConfirm={() => { if (deleteId) { deleteExam(deleteId); setDeleteId(null); } }}
+          description="Êtes-vous sûr de vouloir supprimer cette épreuve ?"
+        />
 
         {/* FAB for mobile */}
         <Link to="/exams/create" className="fixed bottom-20 right-4 md:bottom-6 md:right-6">

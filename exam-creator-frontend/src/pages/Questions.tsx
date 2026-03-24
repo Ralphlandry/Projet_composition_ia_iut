@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Filter, ChevronRight, Edit, Trash2, MoreVertical } from 'lucide-react';
+import { Plus, Search, Filter, ChevronRight, Edit, Trash2, MoreVertical, Users } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,9 +28,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface Subject {
   id: string;
@@ -43,10 +45,13 @@ interface Question {
   question_type: string;
   difficulty: string;
   points: number;
+  created_by: string | null;
   subject: Subject | null;
+  creator: { full_name: string | null; email: string } | null;
 }
 
 const Questions = () => {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -55,6 +60,7 @@ const Questions = () => {
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterOwner, setFilterOwner] = useState<string>('all');
   const [showDialog, setShowDialog] = useState(false);
 
   const [newQuestion, setNewQuestion] = useState({
@@ -87,6 +93,7 @@ const Questions = () => {
         question_type,
         difficulty,
         points,
+        created_by,
         subject:subjects(id, name, color)
       `)
       .order('created_at', { ascending: false });
@@ -99,7 +106,7 @@ const Questions = () => {
 
   const createQuestion = async () => {
     if (!newQuestion.question_text.trim()) {
-      toast.error('Veuillez entrer une question');
+      toast.error(t('Veuillez entrer une question'));
       return;
     }
 
@@ -115,9 +122,9 @@ const Questions = () => {
     });
 
     if (error) {
-      toast.error('Erreur lors de la création');
+      toast.error(t('Erreur lors de la création'));
     } else {
-      toast.success('Question créée');
+      toast.success(t('Question créée'));
       setShowDialog(false);
       setNewQuestion({
         question_text: '',
@@ -132,12 +139,14 @@ const Questions = () => {
     }
   };
 
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const deleteQuestion = async (id: string) => {
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('Erreur lors de la suppression'));
     } else {
-      toast.success('Question supprimée');
+      toast.success(t('Question supprimée'));
       fetchQuestions();
     }
   };
@@ -147,17 +156,18 @@ const Questions = () => {
     const matchesSubject = filterSubject === 'all' || q.subject?.id === filterSubject;
     const matchesDifficulty = filterDifficulty === 'all' || q.difficulty === filterDifficulty;
     const matchesType = filterType === 'all' || q.question_type === filterType;
-    return matchesSearch && matchesSubject && matchesDifficulty && matchesType;
+    const matchesOwner = filterOwner === 'all' || (filterOwner === 'mine' && q.created_by === user?.id);
+    return matchesSearch && matchesSubject && matchesDifficulty && matchesType && matchesOwner;
   });
 
   const getDifficultyBadge = (difficulty: string) => {
     switch (difficulty) {
       case 'facile':
-        return <Badge className="bg-success/20 text-success border-0">Facile</Badge>;
+        return <Badge className="bg-success/20 text-success border-0">{t('Facile')}</Badge>;
       case 'moyen':
-        return <Badge className="bg-warning/20 text-warning border-0">Moyen</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-0">{t('Moyen')}</Badge>;
       case 'difficile':
-        return <Badge className="bg-destructive/20 text-destructive border-0">Difficile</Badge>;
+        return <Badge className="bg-destructive/20 text-destructive border-0">{t('Difficile')}</Badge>;
       default:
         return <Badge variant="secondary">{difficulty}</Badge>;
     }
@@ -174,13 +184,13 @@ const Questions = () => {
   };
 
   return (
-    <AppLayout title="Banque de Questions">
+    <AppLayout title={t("Banque de Questions")}>
       <div className="space-y-6 animate-fade-in">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher par mot-clé"
+            placeholder={t("Rechercher par mot-clé")}
             className="pl-10"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -191,14 +201,14 @@ const Questions = () => {
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline" className="flex items-center gap-1 px-3 py-1.5 cursor-pointer">
             <Filter className="w-3 h-3" />
-            Filtres
+            {t('Filtres')}
           </Badge>
           <Select value={filterSubject} onValueChange={setFilterSubject}>
             <SelectTrigger className="w-auto h-8">
-              <SelectValue placeholder="Matière" />
+              <SelectValue placeholder={t("Matière")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
+              <SelectItem value="all">{t('Toutes')}</SelectItem>
               {subjects.map((s) => (
                 <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
@@ -206,25 +216,36 @@ const Questions = () => {
           </Select>
           <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
             <SelectTrigger className="w-auto h-8">
-              <SelectValue placeholder="Niveau" />
+              <SelectValue placeholder={t("Niveau")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="facile">Facile</SelectItem>
-              <SelectItem value="moyen">Moyen</SelectItem>
-              <SelectItem value="difficile">Difficile</SelectItem>
+              <SelectItem value="all">{t('Tous')}</SelectItem>
+              <SelectItem value="facile">{t('Facile')}</SelectItem>
+              <SelectItem value="moyen">{t('Moyen')}</SelectItem>
+              <SelectItem value="difficile">{t('Difficile')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-auto h-8">
-              <SelectValue placeholder="Type" />
+              <SelectValue placeholder={t("Type")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="qcm">QCM</SelectItem>
-              <SelectItem value="vrai_faux">Vrai/Faux</SelectItem>
-              <SelectItem value="reponse_courte">Réponse courte</SelectItem>
-              <SelectItem value="redaction">Rédaction</SelectItem>
+              <SelectItem value="all">{t('Tous')}</SelectItem>
+              <SelectItem value="qcm">{t('QCM')}</SelectItem>
+              <SelectItem value="vrai_faux">{t('Vrai/Faux')}</SelectItem>
+              <SelectItem value="reponse_courte">{t('Réponse courte')}</SelectItem>
+              <SelectItem value="redaction">{t('Rédaction')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterOwner} onValueChange={setFilterOwner}>
+            <SelectTrigger className="w-auto h-8">
+              <SelectValue placeholder={t("Auteur")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                <span className="flex items-center gap-1"><Users className="w-3 h-3" />{t('Banque partagée')}</span>
+              </SelectItem>
+              <SelectItem value="mine">{t('Mes questions')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -232,10 +253,10 @@ const Questions = () => {
         {/* Questions List */}
         <div className="space-y-2">
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Chargement...</div>
+            <div className="text-center py-12 text-muted-foreground">{t('Chargement...')}</div>
           ) : filteredQuestions.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              Aucune question trouvée
+              {t('Aucune question trouvée')}
             </div>
           ) : (
             filteredQuestions.map((question) => (
@@ -257,6 +278,11 @@ const Questions = () => {
                       <span className="text-xs text-muted-foreground">
                         {question.subject?.name}
                       </span>
+                      {question.created_by !== user?.id && question.creator && (
+                        <span className="text-xs text-muted-foreground italic">
+                          — {question.creator.full_name || question.creator.email}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <DropdownMenu>
@@ -268,14 +294,14 @@ const Questions = () => {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem>
                         <Edit className="w-4 h-4 mr-2" />
-                        Modifier
+                        {t('Modifier')}
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-destructive"
-                        onClick={() => deleteQuestion(question.id)}
+                        onClick={() => setDeleteId(question.id)}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Supprimer
+                        {t('Supprimer')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -294,17 +320,17 @@ const Questions = () => {
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Nouvelle Question</DialogTitle>
+              <DialogTitle>{t('Nouvelle Question')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Matière</Label>
+                <Label>{t('Matière')}</Label>
                 <Select
                   value={newQuestion.subject_id}
                   onValueChange={(value) => setNewQuestion({ ...newQuestion, subject_id: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez" />
+                    <SelectValue placeholder={t("Sélectionnez")} />
                   </SelectTrigger>
                   <SelectContent>
                     {subjects.map((s) => (
@@ -316,7 +342,7 @@ const Questions = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Type</Label>
+                  <Label>{t('Type')}</Label>
                   <Select
                     value={newQuestion.question_type}
                     onValueChange={(value: typeof newQuestion.question_type) => 
@@ -327,15 +353,15 @@ const Questions = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="qcm">QCM</SelectItem>
-                      <SelectItem value="vrai_faux">Vrai/Faux</SelectItem>
-                      <SelectItem value="reponse_courte">Réponse courte</SelectItem>
-                      <SelectItem value="redaction">Rédaction</SelectItem>
+                      <SelectItem value="qcm">{t('QCM')}</SelectItem>
+                      <SelectItem value="vrai_faux">{t('Vrai/Faux')}</SelectItem>
+                      <SelectItem value="reponse_courte">{t('Réponse courte')}</SelectItem>
+                      <SelectItem value="redaction">{t('Rédaction')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Difficulté</Label>
+                  <Label>{t('Difficulté')}</Label>
                   <Select
                     value={newQuestion.difficulty}
                     onValueChange={(value: typeof newQuestion.difficulty) => 
@@ -346,18 +372,18 @@ const Questions = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="facile">Facile</SelectItem>
-                      <SelectItem value="moyen">Moyen</SelectItem>
-                      <SelectItem value="difficile">Difficile</SelectItem>
+                      <SelectItem value="facile">{t('Facile')}</SelectItem>
+                      <SelectItem value="moyen">{t('Moyen')}</SelectItem>
+                      <SelectItem value="difficile">{t('Difficile')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Question</Label>
+                <Label>{t('Question')}</Label>
                 <Textarea
-                  placeholder="Entrez votre question..."
+                  placeholder={t("Entrez votre question...")}
                   value={newQuestion.question_text}
                   onChange={(e) => setNewQuestion({ ...newQuestion, question_text: e.target.value })}
                 />
@@ -365,11 +391,11 @@ const Questions = () => {
 
               {newQuestion.question_type === 'qcm' && (
                 <div className="space-y-2">
-                  <Label>Options</Label>
+                  <Label>{t('Options')}</Label>
                   {newQuestion.options.map((opt, idx) => (
                     <Input
                       key={idx}
-                      placeholder={`Option ${idx + 1}`}
+                      placeholder={`${t('Option')} ${idx + 1}`}
                       value={opt}
                       onChange={(e) => {
                         const newOptions = [...newQuestion.options];
@@ -382,23 +408,23 @@ const Questions = () => {
               )}
 
               <div className="space-y-2">
-                <Label>Réponse correcte</Label>
+                <Label>{t('Réponse correcte')}</Label>
                 {newQuestion.question_type === 'vrai_faux' ? (
                   <Select
                     value={newQuestion.correct_answer}
                     onValueChange={(value) => setNewQuestion({ ...newQuestion, correct_answer: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez" />
+                      <SelectValue placeholder={t("Sélectionnez")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="vrai">Vrai</SelectItem>
-                      <SelectItem value="faux">Faux</SelectItem>
+                      <SelectItem value="vrai">{t('Vrai')}</SelectItem>
+                      <SelectItem value="faux">{t('Faux')}</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : (
                   <Input
-                    placeholder="Réponse correcte"
+                    placeholder={t("Réponse correcte")}
                     value={newQuestion.correct_answer}
                     onChange={(e) => setNewQuestion({ ...newQuestion, correct_answer: e.target.value })}
                   />
@@ -406,7 +432,7 @@ const Questions = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Points</Label>
+                <Label>{t('Points')}</Label>
                 <Input
                   type="number"
                   min={1}
@@ -417,12 +443,19 @@ const Questions = () => {
               </div>
 
               <Button onClick={createQuestion} className="w-full gradient-primary">
-                Créer la question
+                {t('Créer la question')}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={() => { if (deleteId) { deleteQuestion(deleteId); setDeleteId(null); } }}
+        description={t("Êtes-vous sûr de vouloir supprimer cette question ?")}
+      />
     </AppLayout>
   );
 };

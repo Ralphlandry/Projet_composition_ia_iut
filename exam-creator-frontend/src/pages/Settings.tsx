@@ -12,38 +12,40 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTheme } from '@/hooks/useTheme';
+import { useLanguage } from '@/hooks/useLanguage';
+import { type Lang } from '@/lib/i18n';
 import { toast } from 'sonner';
 
 const Settings = () => {
   const { theme, setTheme } = useTheme();
+  const { lang, setLang, t } = useLanguage();
   const [settings, setSettings] = useState({
     notifications: true,
     emailNotifications: false,
-    language: 'fr',
   });
 
   const handleLanguageChange = (value: string) => {
-    setSettings({ ...settings, language: value });
-    toast.info(value === 'fr' ? 'Langue changée en Français' : 'Language changed to English');
+    setLang(value as Lang);
+    toast.success(value === 'fr' ? 'Langue changée en Français' : 'Language changed to English');
   };
 
   return (
-    <AppLayout title="Paramètres">
+    <AppLayout title={t('Parametres')}>
       <div className="space-y-6 animate-fade-in max-w-2xl mx-auto pb-20 md:pb-0">
         {/* Appearance */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-              Apparence
+              {t('Apparence')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Mode sombre</Label>
+                <Label>{t('Mode sombre')}</Label>
                 <p className="text-sm text-muted-foreground">
-                  Utiliser le thème sombre de l'application
+                  {t('Utiliser le thème sombre de l\'application')}
                 </p>
               </div>
               <Switch
@@ -59,27 +61,27 @@ const Settings = () => {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Globe className="w-5 h-5" />
-              Langue
+              {t('Langue')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Langue de l'interface</Label>
+                <Label>{t('Langue de l\'interface')}</Label>
                 <p className="text-sm text-muted-foreground">
-                  Choisissez la langue d'affichage
+                  {t('Choisissez la langue d\'affichage')}
                 </p>
               </div>
               <Select
-                value={settings.language}
+                value={lang}
                 onValueChange={handleLanguageChange}
               >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fr">Français</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="fr">🇫🇷 Français</SelectItem>
+                  <SelectItem value="en">🇬🇧 English</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -91,15 +93,15 @@ const Settings = () => {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="w-5 h-5" />
-              Notifications
+              {t('Notifications')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Notifications push</Label>
+                <Label>{t('Notifications push')}</Label>
                 <p className="text-sm text-muted-foreground">
-                  Recevoir des notifications dans l'application
+                  {t('Recevoir des notifications dans l\'application')}
                 </p>
               </div>
               <Switch
@@ -109,9 +111,9 @@ const Settings = () => {
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Notifications par email</Label>
+                <Label>{t('Notifications par email')}</Label>
                 <p className="text-sm text-muted-foreground">
-                  Recevoir des emails pour les événements importants
+                  {t('Recevoir des emails pour les événements importants')}
                 </p>
               </div>
               <Switch
@@ -127,22 +129,22 @@ const Settings = () => {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="w-5 h-5" />
-              Sécurité
+              {t('Sécurité')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Gérez la sécurité de votre compte
+              {t('Gérez la sécurité de votre compte')}
             </p>
             <ul className="text-sm space-y-2">
               <li className="flex items-center gap-2 text-foreground">
-                • Changer le mot de passe
+                • {t('Changer le mot de passe')}
               </li>
               <li className="flex items-center gap-2 text-foreground">
-                • Activer l'authentification à deux facteurs
+                • {t('Activer l\'authentification à deux facteurs')}
               </li>
               <li className="flex items-center gap-2 text-foreground">
-                • Voir les sessions actives
+                • {t('Voir les sessions actives')}
               </li>
             </ul>
           </CardContent>
@@ -153,22 +155,22 @@ const Settings = () => {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <HelpCircle className="w-5 h-5" />
-              Aide
+              {t('Aide')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Centre d'aide et documentation
+              {t('Centre d\'aide et documentation')}
             </p>
             <ul className="text-sm space-y-2">
               <li className="flex items-center gap-2 text-primary cursor-pointer hover:underline">
-                • Guide de démarrage
+                • {t('Guide de démarrage')}
               </li>
               <li className="flex items-center gap-2 text-primary cursor-pointer hover:underline">
                 • FAQ
               </li>
               <li className="flex items-center gap-2 text-primary cursor-pointer hover:underline">
-                • Contacter le support
+                • {t('Contacter le support')}
               </li>
             </ul>
           </CardContent>

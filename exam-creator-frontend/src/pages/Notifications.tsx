@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Bell, Check, Trash2 } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -20,14 +22,13 @@ interface Notification {
 
 const Notifications = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      const interval = setInterval(fetchNotifications, 15000);
-      return () => clearInterval(interval);
     }
   }, [user]);
 
@@ -67,9 +68,11 @@ const Notifications = () => {
 
     if (!error) {
       setNotifications(notifications.map(n => ({ ...n, is_read: true })));
-      toast.success('Toutes les notifications marquées comme lues');
+      toast.success(t('Toutes les notifications marquées comme lues'));
     }
   };
+
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const deleteNotification = async (id: string) => {
     const { error } = await supabase
@@ -79,7 +82,7 @@ const Notifications = () => {
 
     if (!error) {
       setNotifications(notifications.filter(n => n.id !== id));
-      toast.success('Notification supprimée');
+      toast.success(t('Notification supprimée'));
     }
   };
 
@@ -99,19 +102,19 @@ const Notifications = () => {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <AppLayout title="Notifications">
+    <AppLayout title={t('Notifications')}>
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
           <p className="text-muted-foreground">
             {unreadCount > 0 
-              ? `${unreadCount} notification${unreadCount > 1 ? 's' : ''} non lue${unreadCount > 1 ? 's' : ''}`
-              : 'Aucune notification non lue'}
+              ? `${unreadCount} ${unreadCount > 1 ? t('notifications non lues') : t('notification non lue')}`
+              : t('Aucune notification non lue')}
           </p>
           {unreadCount > 0 && (
             <Button variant="outline" size="sm" onClick={markAllAsRead}>
               <Check className="w-4 h-4 mr-2" />
-              Tout marquer comme lu
+              {t('Tout marquer comme lu')}
             </Button>
           )}
         </div>
@@ -119,11 +122,11 @@ const Notifications = () => {
         {/* Notifications List */}
         <div className="space-y-2">
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Chargement...</div>
+            <div className="text-center py-12 text-muted-foreground">{t('Chargement...')}</div>
           ) : notifications.length === 0 ? (
             <div className="text-center py-12">
               <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Aucune notification</p>
+              <p className="text-muted-foreground">{t('Aucune notification')}</p>
             </div>
           ) : (
             notifications.map((notification) => (
@@ -154,17 +157,17 @@ const Notifications = () => {
                           onClick={() => markAsRead(notification.id)}
                         >
                           <Check className="w-4 h-4 mr-1" />
-                          Marquer comme lu
+                          {t('Marquer comme lu')}
                         </Button>
                       )}
                       <Button 
                         variant="ghost" 
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => deleteNotification(notification.id)}
+                        onClick={() => setDeleteId(notification.id)}
                       >
                         <Trash2 className="w-4 h-4 mr-1" />
-                        Supprimer
+                        {t('Supprimer')}
                       </Button>
                     </div>
                   </div>
@@ -174,6 +177,13 @@ const Notifications = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={() => { if (deleteId) { deleteNotification(deleteId); setDeleteId(null); } }}
+        description={t('Êtes-vous sûr de vouloir supprimer cette notification ?')}
+      />
     </AppLayout>
   );
 };

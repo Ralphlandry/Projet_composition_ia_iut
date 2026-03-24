@@ -1,9 +1,11 @@
 import { Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/backendClient';
 import { toast } from 'sonner';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
+import { useNotificationSSE } from '@/hooks/useNotificationSSE';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +22,12 @@ const Header = ({ title }: HeaderProps) => {
   const { user, signOut, role } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const knownIdsRef = useRef<Set<string> | null>(null);
+
+  // SSE real-time count (updates within ~5s without polling)
+  const sseCount = useNotificationSSE(user?.id);
+  useEffect(() => {
+    if (sseCount > 0) setUnreadCount(sseCount);
+  }, [sseCount]);
 
   const getToastFn = (type: string) => {
     if (type === 'success') return toast.success;
@@ -39,55 +47,54 @@ const Header = ({ title }: HeaderProps) => {
     });
   };
 
-  useEffect(() => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, title, message, type, is_read')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-    const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from('notifications')
-        .select('id, title, message, type, is_read')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+    if (!data) return;
 
-      if (!data) return;
+    const unread = data.filter((n: { is_read: boolean }) => !n.is_read);
+    setUnreadCount(unread.length);
 
-      const unread = data.filter((n: { is_read: boolean }) => !n.is_read);
-      setUnreadCount(unread.length);
+    if (knownIdsRef.current === null) {
+      knownIdsRef.current = new Set(data.map((n: { id: string }) => n.id));
 
-      if (knownIdsRef.current === null) {
-        knownIdsRef.current = new Set(data.map((n: { id: string }) => n.id));
-
-        // Show unread notifications on login (max 3 most recent)
-        const unreadToShow = unread.slice(0, 3);
-        unreadToShow.forEach((n: { title: string; message: string; type: string }, i: number) => {
-          setTimeout(() => showNotifToast(n, 6000), 1000 + i * 800);
-        });
-        if (unread.length > 3) {
-          const remaining = unread.length - 3;
-          setTimeout(() => {
-            toast.info(`Et ${remaining} autre${remaining > 1 ? 's' : ''} notification${remaining > 1 ? 's' : ''} non lue${remaining > 1 ? 's' : ''}`, {
-              duration: 5000,
-              action: {
-                label: 'Tout voir',
-                onClick: () => { globalThis.location.assign('/notifications'); },
-              },
-            });
-          }, 1000 + 3 * 800);
-        }
-        return;
-      }
-
-      const newOnes = data.filter((n: { id: string }) => !knownIdsRef.current.has(n.id));
-      newOnes.forEach((n: { id: string; title: string; message: string; type: string }) => {
-        knownIdsRef.current.add(n.id);
-        showNotifToast(n, 8000);
+      // Show unread notifications on login (max 3 most recent)
+      const unreadToShow = unread.slice(0, 3);
+      unreadToShow.forEach((n: { title: string; message: string; type: string }, i: number) => {
+        setTimeout(() => showNotifToast(n, 6000), 1000 + i * 800);
       });
-    };
+      if (unread.length > 3) {
+        const remaining = unread.length - 3;
+        setTimeout(() => {
+          toast.info(`Et ${remaining} autre${remaining > 1 ? 's' : ''} notification${remaining > 1 ? 's' : ''} non lue${remaining > 1 ? 's' : ''}`, {
+            duration: 5000,
+            action: {
+              label: 'Tout voir',
+              onClick: () => { globalThis.location.assign('/notifications'); },
+            },
+          });
+        }, 1000 + 3 * 800);
+      }
+      return;
+    }
 
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(interval);
+    const newOnes = data.filter((n: { id: string }) => !knownIdsRef.current.has(n.id));
+    newOnes.forEach((n: { id: string; title: string; message: string; type: string }) => {
+      knownIdsRef.current.add(n.id);
+      showNotifToast(n, 8000);
+    });
   }, [user]);
+
+  // Initial fetch + poll every 60s, pausing when tab is hidden
+  useVisibilityPolling(fetchNotifications, 60000, !!user);
+  // Also run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useState(() => { fetchNotifications(); });
 
   const getInitials = () => {
     if (!user?.email) return 'U';

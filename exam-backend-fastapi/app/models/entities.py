@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -143,6 +143,20 @@ class ExamPart(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_index: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    user_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)          # insert | update | delete
+    table_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    row_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    changes: Mapped[str | None] = mapped_column(Text, nullable=True)         # JSON string
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class ExamQuestion(Base):

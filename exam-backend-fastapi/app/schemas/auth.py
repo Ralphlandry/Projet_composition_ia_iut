@@ -80,3 +80,13 @@ class AdminUpdateRoleIn(BaseModel):
             if not self.specialty_id:
                 raise ValueError("La spécialité est obligatoire pour un étudiant")
         return self
+
+
+class AdminResetPasswordIn(BaseModel):
+    user_id: str
+    new_password: str = Field(min_length=8)
+
+
+class AdminDisableUserIn(BaseModel):
+    user_id: str
+    disabled: bool

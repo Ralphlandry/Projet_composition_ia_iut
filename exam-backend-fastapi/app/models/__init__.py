@@ -1,5 +1,6 @@
 from .entities import (
     Answer,
+    AuditLog,
     Class,
     ClassStudent,
     Exam,
@@ -18,6 +19,7 @@ from .entities import (
 
 __all__ = [
     "Answer",
+    "AuditLog",
     "Class",
     "ClassStudent",
     "Exam",

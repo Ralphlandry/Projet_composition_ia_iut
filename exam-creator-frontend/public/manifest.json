@@ -1,0 +1,25 @@
+{
+  "name": "EvalPro — Évaluations numériques",
+  "short_name": "EvalPro",
+  "description": "Plateforme d'évaluations numériques sécurisée.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/evalpro-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "lang": "fr"
+}

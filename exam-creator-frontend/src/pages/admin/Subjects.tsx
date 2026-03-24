@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, BookOpen } from 'lucide-react';
+import { useLanguage } from '@/hooks/useLanguage';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +25,7 @@ interface Subject {
 }
 
 const AdminSubjects = () => {
+  const { t } = useLanguage();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -50,7 +53,7 @@ const AdminSubjects = () => {
 
   const saveSubject = async () => {
     if (!formData.name.trim()) {
-      toast.error('Veuillez entrer un nom');
+      toast.error(t('Veuillez entrer un nom'));
       return;
     }
 
@@ -65,9 +68,9 @@ const AdminSubjects = () => {
         .eq('id', editingSubject.id);
 
       if (error) {
-        toast.error('Erreur lors de la modification');
+        toast.error(t('Erreur lors de la modification'));
       } else {
-        toast.success('Matière modifiée');
+        toast.success(t('Matière modifiée'));
       }
     } else {
       const { error } = await supabase.from('subjects').insert({
@@ -77,9 +80,9 @@ const AdminSubjects = () => {
       });
 
       if (error) {
-        toast.error('Erreur lors de la création');
+        toast.error(t('Erreur lors de la création'));
       } else {
-        toast.success('Matière créée');
+        toast.success(t('Matière créée'));
       }
     }
 
@@ -89,12 +92,14 @@ const AdminSubjects = () => {
     fetchSubjects();
   };
 
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const deleteSubject = async (id: string) => {
     const { error } = await supabase.from('subjects').delete().eq('id', id);
     if (error) {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('Erreur lors de la suppression'));
     } else {
-      toast.success('Matière supprimée');
+      toast.success(t('Matière supprimée'));
       fetchSubjects();
     }
   };
@@ -116,45 +121,45 @@ const AdminSubjects = () => {
   };
 
   return (
-    <AppLayout title="Gestion des Matières">
+    <AppLayout title={t('Gestion des Matières')}>
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
           <p className="text-muted-foreground">
-            {subjects.length} matière{subjects.length > 1 ? 's' : ''} configurée{subjects.length > 1 ? 's' : ''}
+            {subjects.length} {t('matière(s) configurée(s)')}
           </p>
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
               <Button className="gradient-primary" onClick={openCreateDialog}>
                 <Plus className="w-4 h-4 mr-2" />
-                Créer une matière
+                {t('Créer une matière')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  {editingSubject ? 'Modifier la matière' : 'Nouvelle matière'}
+                  {editingSubject ? t('Modifier la matière') : t('Nouvelle matière')}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Nom</Label>
+                  <Label>{t('Nom')}</Label>
                   <Input
-                    placeholder="Ex: Informatique"
+                    placeholder={t('Ex: Informatique')}
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description</Label>
+                  <Label>{t('Description')}</Label>
                   <Input
-                    placeholder="Description de la matière"
+                    placeholder={t('Description de la matière')}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Couleur</Label>
+                  <Label>{t('Couleur')}</Label>
                   <div className="flex gap-2">
                     <Input
                       type="color"
@@ -170,7 +175,7 @@ const AdminSubjects = () => {
                   </div>
                 </div>
                 <Button onClick={saveSubject} className="w-full gradient-primary">
-                  {editingSubject ? 'Modifier la matière' : 'Créer la matière'}
+                  {editingSubject ? t('Modifier la matière') : t('Créer la matière')}
                 </Button>
               </div>
             </DialogContent>
@@ -181,11 +186,11 @@ const AdminSubjects = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
-              Chargement...
+              {t('Chargement...')}
             </div>
           ) : subjects.length === 0 ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
-              Aucune matière configurée
+              {t('Aucune matière configurée')}
             </div>
           ) : (
             subjects.map((subject) => (
@@ -215,13 +220,13 @@ const AdminSubjects = () => {
                       onClick={() => openEditDialog(subject)}
                     >
                       <Edit className="w-4 h-4 mr-1" />
-                      Modifier
+                      {t('Modifier')}
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
                       className="text-destructive hover:text-destructive"
-                      onClick={() => deleteSubject(subject.id)}
+                      onClick={() => setDeleteId(subject.id)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -232,6 +237,13 @@ const AdminSubjects = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={() => { if (deleteId) { deleteSubject(deleteId); setDeleteId(null); } }}
+        description="Êtes-vous sûr de vouloir supprimer cette matière ?"
+      />
     </AppLayout>
   );
 };

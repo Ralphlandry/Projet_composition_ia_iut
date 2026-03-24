@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { LanguageProvider } from "@/hooks/useLanguage";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -28,9 +29,19 @@ import AdminSpecialties from "./pages/admin/Specialties";
 import AdminLevels from "./pages/admin/Levels";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import SendNotifications from "./pages/admin/SendNotifications";
+import AdminAuditLogs from "./pages/admin/AuditLogs";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,       // data considered fresh for 30s
+      gcTime: 5 * 60_000,      // keep unused cache for 5 min
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const ProtectedRoute = ({
   children,
@@ -123,6 +134,7 @@ const AppRoutes = () => {
       <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['admin']}><AdminSubjects /></ProtectedRoute>} />
       <Route path="/admin/levels" element={<ProtectedRoute allowedRoles={['admin']}><AdminLevels /></ProtectedRoute>} />
       <Route path="/admin/notifications" element={<ProtectedRoute allowedRoles={['admin']}><SendNotifications /></ProtectedRoute>} />
+      <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
       
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -131,17 +143,19 @@ const AppRoutes = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+              <AppRoutes />
+            </BrowserRouter>
+          </TooltipProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

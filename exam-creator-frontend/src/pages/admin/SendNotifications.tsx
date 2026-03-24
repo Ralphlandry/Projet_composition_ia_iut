@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/lib/backendClient';
+import { useLanguage } from '@/hooks/useLanguage';
 import { toast } from 'sonner';
 
 interface User {
@@ -25,6 +26,7 @@ interface User {
 }
 
 const SendNotifications = () => {
+  const { t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -155,23 +157,23 @@ const SendNotifications = () => {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="w-5 h-5 text-primary" />
-              Composer la notification
+              {t('Composer la notification')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Titre *</Label>
+              <Label>{t('Titre *')}</Label>
               <Input
-                placeholder="Titre de la notification"
+                placeholder={t('Titre de la notification')}
                 value={notification.title}
                 onChange={(e) => setNotification({ ...notification, title: e.target.value })}
                 className="bg-input"
               />
             </div>
             <div className="space-y-2">
-              <Label>Message</Label>
+              <Label>{t('Message')}</Label>
               <Textarea
-                placeholder="Contenu de la notification..."
+                placeholder={t('Contenu de la notification...')}
                 value={notification.message}
                 onChange={(e) => setNotification({ ...notification, message: e.target.value })}
                 rows={4}
@@ -179,7 +181,7 @@ const SendNotifications = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>{t('Type')}</Label>
               <Select
                 value={notification.type}
                 onValueChange={(value) => setNotification({ ...notification, type: value })}
@@ -191,19 +193,19 @@ const SendNotifications = () => {
                   <SelectItem value="info">
                     <div className="flex items-center gap-2">
                       <Info className="w-4 h-4 text-primary" />
-                      Information
+                      {t('Information')}
                     </div>
                   </SelectItem>
                   <SelectItem value="success">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-success" />
-                      Succès
+                      {t('Succès')}
                     </div>
                   </SelectItem>
                   <SelectItem value="warning">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 text-warning" />
-                      Avertissement
+                      {t('Avertissement')}
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -215,7 +217,7 @@ const SendNotifications = () => {
               className="w-full gradient-primary"
             >
               <Send className="w-4 h-4 mr-2" />
-              {sending ? 'Envoi...' : `Envoyer à ${selectedUsers.length} utilisateur(s)`}
+              {sending ? t('Envoi en cours...') : `${t('Envoyer la notification')} (${selectedUsers.length})`}
             </Button>
           </CardContent>
         </Card>
@@ -225,7 +227,7 @@ const SendNotifications = () => {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              Sélectionner les destinataires
+              {t('Sélectionner les destinataires')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -237,7 +239,7 @@ const SendNotifications = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="all">{t('Tous')}</SelectItem>
                   <SelectItem value="admin">Admins</SelectItem>
                   <SelectItem value="professeur">Professeurs</SelectItem>
                   <SelectItem value="etudiant">Étudiants</SelectItem>
@@ -253,7 +255,7 @@ const SendNotifications = () => {
                 onCheckedChange={handleSelectAll}
               />
               <Label htmlFor="select-all" className="font-medium cursor-pointer">
-                Sélectionner tous ({filteredUsers.length})
+                {t('Tout sélectionner')} ({filteredUsers.length})
               </Label>
             </div>
 
@@ -273,7 +275,7 @@ const SendNotifications = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium text-foreground">
-                          {user.full_name || 'Sans nom'}
+                          {user.full_name || t('Sans nom')}
                         </p>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                       </div>

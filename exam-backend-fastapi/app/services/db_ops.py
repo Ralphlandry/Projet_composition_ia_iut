@@ -128,8 +128,12 @@ def hydrate_related(db: Session, table: str, rows: list[dict[str, Any]]) -> list
         subject_ids = [r.get("subject_id") for r in rows if r.get("subject_id")]
         subjects = db.query(Subject).filter(Subject.id.in_(subject_ids)).all() if subject_ids else []
         subject_map = {s.id: serialize_row(s) for s in subjects}
+        creator_ids = [r.get("created_by") for r in rows if r.get("created_by")]
+        creators = db.query(Profile).filter(Profile.id.in_(creator_ids)).all() if creator_ids else []
+        creator_map = {c.id: {"full_name": c.full_name, "email": c.email} for c in creators}
         for r in rows:
             r["subject"] = subject_map.get(r.get("subject_id"))
+            r["creator"] = creator_map.get(r.get("created_by"))
     elif table == "student_profiles":
         level_ids = [r.get("level_id") for r in rows if r.get("level_id")]
         specialty_ids = [r.get("specialty_id") for r in rows if r.get("specialty_id")]

@@ -12,9 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/backendClient';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface SubmissionDetails {
   id: string;
+  student_id: string;
   score: number | null;
   status: string;
   submitted_at: string;
@@ -28,6 +30,7 @@ interface SubmissionDetails {
     full_name: string | null;
     email: string;
   } | null;
+  student_number?: string;
 }
 
 interface Answer {
@@ -45,10 +48,12 @@ interface Answer {
 }
 
 const Corrections = () => {
+  const { t } = useLanguage();
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [submission, setSubmission] = useState<SubmissionDetails | null>(null);
+  const [studentNumber, setStudentNumber] = useState('');
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,6 +75,7 @@ const Corrections = () => {
       .from('submissions')
       .select(`
         id,
+        student_id,
         score,
         status,
         submitted_at,
@@ -80,7 +86,17 @@ const Corrections = () => {
       .single();
 
     if (submissionData) {
-      setSubmission(submissionData as unknown as SubmissionDetails);
+      const sub = submissionData as unknown as SubmissionDetails;
+      setSubmission(sub);
+      // Fetch student_number
+      if (sub.student_id) {
+        const { data: spData } = await supabase
+          .from('student_profiles')
+          .select('student_number')
+          .eq('user_id', sub.student_id)
+          .single();
+        if (spData) setStudentNumber((spData as any).student_number || '');
+      }
     }
 
     // Fetch answers
@@ -156,11 +172,11 @@ const Corrections = () => {
         })
         .eq('id', id);
 
-      toast.success('Correction enregistrée');
+      toast.success(t('Correction enregistrée'));
       navigate('/dashboard');
     } catch (error) {
       console.error('Erreur sauvegarde correction:', error);
-      toast.error('Erreur lors de l\'enregistrement');
+      toast.error(t("Erreur lors de l'enregistrement"));
     } finally {
       setSaving(false);
     }
@@ -179,10 +195,10 @@ const Corrections = () => {
       if (error) throw error;
 
       await fetchSubmissionDetails();
-      toast.success('Correction IA lancée. Les propositions ont été rechargées.');
+      toast.success(t('Correction IA lancée. Les propositions ont été rechargées.'));
     } catch (error) {
       console.error('Error running AI correction:', error);
-      toast.error('Impossible de lancer la correction IA. Vérifiez que le service IA est démarré.');
+      toast.error(t('Impossible de lancer la correction IA. Vérifiez que le service IA est démarré.'));
     } finally {
       setApplyingAi(false);
     }
@@ -194,9 +210,9 @@ const Corrections = () => {
 
   if (loading) {
     return (
-      <AppLayout title="Correction">
+      <AppLayout title={t("Correction")}>
         <div className="flex items-center justify-center py-12 text-muted-foreground">
-          Chargement...
+          {t('Chargement...')}
         </div>
       </AppLayout>
     );
@@ -204,22 +220,22 @@ const Corrections = () => {
 
   if (!submission) {
     return (
-      <AppLayout title="Correction">
+      <AppLayout title={t("Correction")}>
         <div className="text-center py-12 text-muted-foreground">
-          Soumission non trouvée
+          {t('Soumission non trouvée')}
         </div>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout title="Correction">
+    <AppLayout title={t("Correction")}>
       <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate(-1)}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Retour
+            {t('Retour')}
           </Button>
           <div className="flex items-center gap-2">
             <Button
@@ -228,7 +244,7 @@ const Corrections = () => {
               disabled={applyingAi}
             >
               <Sparkles className="w-4 h-4 mr-2" />
-              {applyingAi ? 'Correction IA...' : 'Lancer correction IA'}
+              {applyingAi ? t('Correction IA...') : t('Lancer correction IA')}
             </Button>
             <Button 
               onClick={saveGrades}
@@ -236,7 +252,7 @@ const Corrections = () => {
               className="gradient-success"
             >
               <Save className="w-4 h-4 mr-2" />
-              Enregistrer
+              {t('Enregistrer')}
             </Button>
           </div>
         </div>
@@ -251,11 +267,12 @@ const Corrections = () => {
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4" />
                 {submission.student?.full_name || submission.student?.email}
+                {studentNumber && <Badge variant="outline" className="ml-1 text-xs">{studentNumber}</Badge>}
               </div>
               {submission.submitted_at && (
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4" />
-                  Soumis le {new Date(submission.submitted_at).toLocaleDateString('fr-FR')}
+                  {t('Soumis le')} {new Date(submission.submitted_at).toLocaleDateString('fr-FR')}
                 </div>
               )}
             </div>
@@ -266,7 +283,7 @@ const Corrections = () => {
         <Card className="bg-card border-border">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Note actuelle</span>
+              <span className="text-sm text-muted-foreground">{t('Note actuelle')}</span>
               <span className="text-lg font-bold text-foreground">
                 {currentScore}/{totalPoints}
               </span>
@@ -277,16 +294,16 @@ const Corrections = () => {
 
         {/* Answers */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-foreground">Réponses</h3>
+          <h3 className="text-lg font-semibold text-foreground">{t('Réponses')}</h3>
           
           {answers.length === 0 ? (
-            <p className="text-muted-foreground">Aucune réponse soumise</p>
+            <p className="text-muted-foreground">{t('Aucune réponse soumise')}</p>
           ) : (
             answers.map((answer, index) => (
               <Card key={answer.id} className="bg-card border-border">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between">
-                    <span>Question {index + 1}</span>
+                    <span>{t('Question')} {index + 1}</span>
                     <Badge variant="outline">
                       {answer.question?.points || 0} pt{(answer.question?.points || 0) > 1 ? 's' : ''}
                     </Badge>
@@ -299,17 +316,17 @@ const Corrections = () => {
                     </p>
                     {answer.question?.correct_answer && (
                       <p className="text-sm text-muted-foreground">
-                        Réponse correcte: <span className="font-medium text-foreground">{answer.question.correct_answer}</span>
+                        {t('Réponse correcte:')} <span className="font-medium text-foreground">{answer.question.correct_answer}</span>
                       </p>
                     )}
                     {!answer.question?.correct_answer && (answer.question?.question_type === 'reponse_courte' || answer.question?.question_type === 'redaction') && (
-                      <p className="text-xs text-blue-600 dark:text-blue-400">Question ouverte — correction guidée par l'IA</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">{t("Question ouverte — correction guidée par l'IA")}</p>
                     )}
                   </div>
 
                   <div className="p-3 bg-secondary rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Réponse de l'étudiant :</p>
-                    <p className="text-foreground">{answer.answer_text || <em className="text-muted-foreground">Pas de réponse</em>}</p>
+                    <p className="text-sm text-muted-foreground mb-1">{t("Réponse de l'étudiant :")}</p>
+                    <p className="text-foreground">{answer.answer_text || <em className="text-muted-foreground">{t('Pas de réponse')}</em>}</p>
                   </div>
 
                   {aiSuggestions[answer.id]?.feedback && (
@@ -317,7 +334,7 @@ const Corrections = () => {
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400">
                           <Sparkles className="w-3.5 h-3.5" />
-                          Analyse IA — proposition : {aiSuggestions[answer.id].points} / {answer.question?.points || 0} pt{(answer.question?.points || 0) > 1 ? 's' : ''}
+                          {t('Analyse IA — proposition :')} {aiSuggestions[answer.id].points} / {answer.question?.points || 0} pt{(answer.question?.points || 0) > 1 ? 's' : ''}
                         </div>
                         <Button
                           variant="ghost"
@@ -328,7 +345,7 @@ const Corrections = () => {
                             [answer.id]: { ...aiSuggestions[answer.id] },
                           })}
                         >
-                          Appliquer
+                          {t('Appliquer')}
                         </Button>
                       </div>
                       <p className="text-sm text-muted-foreground">{aiSuggestions[answer.id].feedback}</p>
@@ -337,7 +354,7 @@ const Corrections = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Points attribués</Label>
+                      <Label>{t('Points attribués')}</Label>
                       <Input
                         type="number"
                         min={0}
@@ -354,9 +371,9 @@ const Corrections = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Feedback</Label>
+                      <Label>{t('Feedback')}</Label>
                       <Textarea
-                        placeholder="Commentaire pour l'étudiant..."
+                        placeholder={t("Commentaire pour l'étudiant...")}
                         value={grades[answer.id]?.feedback || ''}
                         onChange={(e) => setGrades({
                           ...grades,
@@ -382,7 +399,7 @@ const Corrections = () => {
             className="flex-1"
             onClick={() => navigate(-1)}
           >
-            Annuler
+            {t('Annuler')}
           </Button>
           <Button 
             className="flex-1 gradient-success"
@@ -390,7 +407,7 @@ const Corrections = () => {
             disabled={saving}
           >
             <Check className="w-4 h-4 mr-2" />
-            Valider la correction
+            {t('Valider la correction')}
           </Button>
         </div>
       </div>

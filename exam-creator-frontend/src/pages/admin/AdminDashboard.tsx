@@ -16,6 +16,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { supabase } from '@/lib/backendClient';
 
 interface UsersByRole {
@@ -42,6 +43,7 @@ interface RecentUser {
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [userStats, setUserStats] = useState<UsersByRole>({ total: 0, admins: 0, professeurs: 0, etudiants: 0 });
   const [examStats, setExamStats] = useState<ExamsByStatus>({ total: 0, brouillon: 0, publie: 0, planifie: 0 });
   const [subjectsCount, setSubjectsCount] = useState(0);
@@ -115,11 +117,11 @@ const AdminDashboard = () => {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'admin':
-        return <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-0 text-[10px]">Admin</Badge>;
+        return <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-0 text-[10px]">{t('Admin')}</Badge>;
       case 'professeur':
-        return <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0 text-[10px]">Professeur</Badge>;
+        return <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0 text-[10px]">{t('Professeur')}</Badge>;
       case 'etudiant':
-        return <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0 text-[10px]">Etudiant</Badge>;
+        return <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0 text-[10px]">{t('Etudiant')}</Badge>;
       default:
         return <Badge variant="secondary" className="text-[10px]">{role}</Badge>;
     }
@@ -127,7 +129,7 @@ const AdminDashboard = () => {
 
   const statCards = [
     {
-      label: 'Utilisateurs',
+      label: t('Utilisateurs'),
       value: userStats.total,
       detail: `${userStats.professeurs} prof. / ${userStats.etudiants} etud.`,
       icon: Users,
@@ -135,23 +137,23 @@ const AdminDashboard = () => {
       link: '/admin/users',
     },
     {
-      label: 'Epreuves',
+      label: t('Epreuves'),
       value: examStats.total,
       detail: `${examStats.publie} publiee${examStats.publie > 1 ? 's' : ''} / ${examStats.brouillon} brouillon${examStats.brouillon > 1 ? 's' : ''}`,
       icon: FileText,
       gradient: 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
     },
     {
-      label: 'Soumissions',
+      label: t('Soumissions'),
       value: submissionsCount,
-      detail: 'Copies rendues',
+      detail: t('Copies rendues'),
       icon: TrendingUp,
       gradient: 'linear-gradient(135deg, #f97316, #fb923c)',
     },
     {
-      label: 'Matieres',
+      label: t('Matieres'),
       value: subjectsCount,
-      detail: `${specialtiesCount} filiere${specialtiesCount > 1 ? 's' : ''} / ${levelsCount} niveau${levelsCount > 1 ? 'x' : ''}`,
+      detail: `${specialtiesCount} ${t('filières')} / ${levelsCount} ${t('niveaux')}`,
       icon: BookOpen,
       gradient: 'linear-gradient(135deg, #10b981, #34d399)',
       link: '/admin/subjects',
@@ -159,11 +161,11 @@ const AdminDashboard = () => {
   ];
 
   const quickActions = [
-    { label: 'Gerer les utilisateurs', icon: UserCog, to: '/admin/users', color: 'text-blue-500' },
-    { label: 'Gerer les filieres', icon: Layers, to: '/admin/filieres', color: 'text-purple-500' },
-    { label: 'Gerer les matieres', icon: BookOpen, to: '/admin/subjects', color: 'text-emerald-500' },
-    { label: 'Gerer les niveaux', icon: GraduationCap, to: '/admin/levels', color: 'text-orange-500' },
-    { label: 'Envoyer une notification', icon: Bell, to: '/admin/notifications', color: 'text-pink-500' },
+    { label: t('Gerer les utilisateurs'), icon: UserCog, to: '/admin/users', color: 'text-blue-500' },
+    { label: t('Gerer les filieres'), icon: Layers, to: '/admin/filieres', color: 'text-purple-500' },
+    { label: t('Gerer les matieres'), icon: BookOpen, to: '/admin/subjects', color: 'text-emerald-500' },
+    { label: t('Gerer les niveaux'), icon: GraduationCap, to: '/admin/levels', color: 'text-orange-500' },
+    { label: t('Envoyer une notification'), icon: Bell, to: '/admin/notifications', color: 'text-pink-500' },
   ];
 
   return (
@@ -173,10 +175,10 @@ const AdminDashboard = () => {
         {/* Welcome */}
         <div className="bg-card rounded-xl p-6 shadow-card border border-border">
           <h2 className="text-xl font-bold text-foreground">
-            Panneau d'Administration
+            {t('Panneau d\'Administration')}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Vue d'ensemble de la plateforme EvalPro.
+            {t('Vue d\'ensemble de la plateforme EvalPro.')}
           </p>
         </div>
 
@@ -218,12 +220,12 @@ const AdminDashboard = () => {
           {/* Derniers inscrits */}
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <h3 className="text-sm font-semibold text-foreground">Derniers inscrits</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('Derniers inscrits')}</h3>
               <Badge variant="secondary" className="text-[10px] h-5 font-semibold">{recentUsers.length}</Badge>
             </div>
             <div className="space-y-2">
               {recentUsers.length === 0 && !loading && (
-                <p className="text-sm text-muted-foreground">Aucun utilisateur.</p>
+                <p className="text-sm text-muted-foreground">{t('Aucun utilisateur.')}</p>
               )}
               {recentUsers.map((u) => (
                 <Card key={u.id} className="border shadow-card hover:shadow-card-hover transition-shadow">
@@ -248,7 +250,7 @@ const AdminDashboard = () => {
 
           {/* Actions rapides */}
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Actions rapides</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t('Actions rapides')}</h3>
             <div className="space-y-2">
               {quickActions.map((action) => {
                 const Icon = action.icon;

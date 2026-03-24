@@ -1,19 +1,34 @@
 from __future__ import annotations
 
+import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, is_password_too_long, verify_password
 from app.db.session import get_db
-from app.models import Level, Profile, Specialty, StudentProfile, Subject, UserRole
-from app.schemas import AdminCreateUserIn, AdminUpdateRoleIn, SessionOut, SignInIn, SignUpIn, UserOut
+from app.models import AuditLog, Level, Profile, Specialty, StudentProfile, Subject, UserRole
+from app.schemas import AdminCreateUserIn, AdminDisableUserIn, AdminResetPasswordIn, AdminUpdateRoleIn, SessionOut, SignInIn, SignUpIn, UserOut
 from app.services.db_ops import get_user_role
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# ----- Rate limiting en mémoire (5 tentatives / 5 minutes par IP) -----
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_MAX = 5
+_LOGIN_WINDOW = 300  # secondes
+
+
+def _check_rate_limit(ip: str) -> None:
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOGIN_WINDOW]
+    if len(_login_attempts[ip]) >= _LOGIN_MAX:
+        raise HTTPException(status_code=429, detail="Trop de tentatives de connexion. Réessayez dans 5 minutes.")
+    _login_attempts[ip].append(now)
 
 
 def _ensure_valid_student_dependencies(db: Session, level_id: str | None, specialty_id: str | None) -> None:
@@ -95,13 +110,17 @@ def signup(payload: SignUpIn, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=SessionOut)
-def login(payload: SignInIn, db: Session = Depends(get_db)):
+def login(request: Request, payload: SignInIn, db: Session = Depends(get_db)):
+    _check_rate_limit(request.client.host if request.client else "unknown")
     if is_password_too_long(payload.password):
         raise HTTPException(status_code=400, detail="Mot de passe trop long (maximum 72 octets)")
 
     user = db.query(Profile).filter(Profile.email == payload.email).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    if user.password_hash.startswith("<disabled>"):
+        raise HTTPException(status_code=403, detail="Ce compte a été désactivé. Contactez l'administrateur.")
 
     token = create_access_token(subject=user.id)
     return SessionOut(access_token=token, user=UserOut(id=user.id, email=user.email, full_name=user.full_name))
@@ -231,4 +250,91 @@ def admin_list_users(
             }
             for profile in profiles
         ]
+    }
+
+
+@router.post("/admin/reset-password")
+def admin_reset_password(
+    payload: AdminResetPasswordIn,
+    current_user: Profile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Réinitialise le mot de passe d'un utilisateur (admin uniquement)."""
+    _ensure_admin(db, current_user.id)
+
+    target = db.query(Profile).filter(Profile.id == payload.user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    if is_password_too_long(payload.new_password):
+        raise HTTPException(status_code=400, detail="Mot de passe trop long (maximum 72 octets)")
+
+    target.password_hash = hash_password(payload.new_password)
+    target.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "Mot de passe réinitialisé avec succès"}
+
+
+@router.post("/admin/disable-user")
+def admin_disable_user(
+    payload: AdminDisableUserIn,
+    current_user: Profile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Active ou désactive un compte utilisateur (admin uniquement)."""
+    _ensure_admin(db, current_user.id)
+
+    if payload.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Impossible de désactiver son propre compte")
+
+    target = db.query(Profile).filter(Profile.id == payload.user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    # Préfixe "<disabled>" pour signaler un compte désactivé sans supprimer le hash
+    if payload.disabled:
+        if not target.password_hash.startswith("<disabled>"):
+            target.password_hash = f"<disabled>{target.password_hash}"
+    else:
+        if target.password_hash.startswith("<disabled>"):
+            target.password_hash = target.password_hash[len("<disabled>"):]
+
+    target.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "Compte mis à jour", "disabled": payload.disabled}
+
+
+@router.get("/audit-logs")
+def get_audit_logs(
+    limit: int = 100,
+    offset: int = 0,
+    table_name: str | None = None,
+    current_user: Profile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retourne les logs d'audit (admin uniquement)."""
+    _ensure_admin(db, current_user.id)
+
+    query = db.query(AuditLog).order_by(AuditLog.created_at.desc())
+    if table_name:
+        query = query.filter(AuditLog.table_name == table_name)
+    total = query.count()
+    logs = query.offset(offset).limit(min(limit, 500)).all()
+
+    return {
+        "total": total,
+        "logs": [
+            {
+                "id": log.id,
+                "user_id": log.user_id,
+                "user_email": log.user_email,
+                "action": log.action,
+                "table_name": log.table_name,
+                "row_id": log.row_id,
+                "changes": log.changes,
+                "ip_address": log.ip_address,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ],
     }

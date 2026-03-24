@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { supabase } from '@/lib/backendClient';
 
 interface Exam {
@@ -24,6 +25,7 @@ interface Submission {
 
 const Dashboard = () => {
   const { user, isProfesseur } = useAuth();
+  const { t } = useLanguage();
   const [stats, setStats] = useState({
     averageScore: 0,
     successRate: 0,
@@ -106,11 +108,11 @@ const Dashboard = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'publie':
-        return <Badge className="bg-success/20 text-success border-0">Publié</Badge>;
+        return <Badge className="bg-success/20 text-success border-0">{t('Publié')}</Badge>;
       case 'brouillon':
-        return <Badge className="bg-warning/20 text-warning border-0">Brouillon</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-0">{t('Brouillon')}</Badge>;
       case 'corrige':
-        return <Badge className="bg-primary/20 text-primary border-0">Corrigé</Badge>;
+        return <Badge className="bg-primary/20 text-primary border-0">{t('Corrigé')}</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -123,12 +125,12 @@ const Dashboard = () => {
         {/* Welcome */}
         <div className="bg-card rounded-xl p-6 shadow-card border border-border">
           <h2 className="text-xl font-bold text-foreground">
-            Bonjour{isProfesseur ? ', Professeur' : ''}
+            {t('Bonjour')}{isProfesseur ? t(', Professeur') : ''}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             {isProfesseur
-              ? 'Gerez vos epreuves et suivez les performances de vos etudiants.'
-              : 'Consultez vos epreuves a venir et vos resultats.'}
+              ? t('Gerez vos epreuves et suivez les performances de vos etudiants.')
+              : t('Consultez vos epreuves a venir et vos resultats.')}
           </p>
         </div>
 
@@ -137,7 +139,7 @@ const Dashboard = () => {
           <div className="rounded-xl p-5 shadow-card text-white" style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/80 font-medium">Note Moyenne</p>
+                <p className="text-sm text-white/80 font-medium">{t('Note Moyenne')}</p>
                 <p className="text-3xl font-bold mt-1">{stats.averageScore}<span className="text-base font-normal text-white/70">/20</span></p>
               </div>
               <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
@@ -152,7 +154,7 @@ const Dashboard = () => {
           <div className="rounded-xl p-5 shadow-card text-white" style={{ background: 'linear-gradient(135deg, #f97316, #fb923c)' }}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/80 font-medium">Taux de Reussite</p>
+                <p className="text-sm text-white/80 font-medium">{t('Taux de Reussite')}</p>
                 <p className="text-3xl font-bold mt-1">{stats.successRate}<span className="text-base font-normal text-white/70">%</span></p>
               </div>
               <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
@@ -167,7 +169,7 @@ const Dashboard = () => {
           <div className="rounded-xl p-5 shadow-card text-white" style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/80 font-medium">Epreuves Actives</p>
+                <p className="text-sm text-white/80 font-medium">{t('Epreuves Actives')}</p>
                 <p className="text-3xl font-bold mt-1">{stats.activeExams}</p>
               </div>
               <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
@@ -175,7 +177,7 @@ const Dashboard = () => {
               </div>
             </div>
             <p className="text-xs text-white/70 mt-3">
-              {stats.activeExams === 0 ? 'Aucune epreuve publiee' : `${stats.activeExams} epreuve${stats.activeExams > 1 ? 's' : ''} en cours`}
+              {stats.activeExams === 0 ? t('Aucune epreuve publiee') : `${stats.activeExams} ${t('Epreuves')} ${t('en cours')}`}
             </p>
           </div>
         </div>
@@ -184,7 +186,7 @@ const Dashboard = () => {
         {isProfesseur && pendingCorrections.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <h3 className="text-sm font-semibold text-foreground">Corrections en attente</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('Corrections en attente')}</h3>
               <Badge variant="secondary" className="text-[10px] h-5 font-semibold">{pendingCorrections.length}</Badge>
             </div>
             <div className="space-y-2">
@@ -201,7 +203,7 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <Link to={`/corrections/${submission.id}`} className="flex-shrink-0">
-                      <Button size="sm" className="text-xs h-8 px-4">Corriger</Button>
+                      <Button size="sm" className="text-xs h-8 px-4">{t('Corriger')}</Button>
                     </Link>
                   </CardContent>
                 </Card>
@@ -214,13 +216,13 @@ const Dashboard = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">
-              {isProfesseur ? 'Epreuves Creees' : 'Epreuves Disponibles'}
+              {isProfesseur ? t('Epreuves Creees') : t('Epreuves Disponibles')}
             </h3>
             {isProfesseur && (
               <Link to="/exams/create">
                 <Button size="sm" className="text-xs h-8 px-4 gap-1.5">
                   <Plus className="w-3.5 h-3.5" />
-                  Nouvelle
+                  {t('Nouvelle')}
                 </Button>
               </Link>
             )}

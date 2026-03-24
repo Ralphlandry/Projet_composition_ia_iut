@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Network } from 'lucide-react';
+import { useLanguage } from '@/hooks/useLanguage';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +32,7 @@ interface Specialty {
 }
 
 const AdminSpecialties = () => {
+  const { t } = useLanguage();
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,11 +72,11 @@ const AdminSpecialties = () => {
 
   const save = async () => {
     if (!formData.name.trim()) {
-      toast.error('Nom de filière requis');
+      toast.error(t('Nom de filière requis'));
       return;
     }
     if (formData.allowed_subject_ids.length === 0) {
-      toast.error('Sélectionne au moins une matière autorisée');
+      toast.error(t('Sélectionne au moins une matière autorisée'));
       return;
     }
 
@@ -88,8 +91,8 @@ const AdminSpecialties = () => {
         })
         .eq('id', editing.id);
 
-      if (error) toast.error(error.message || 'Erreur modification filière');
-      else toast.success('Filière modifiée');
+      if (error) toast.error(error.message || t('Erreur modification filière'));
+      else toast.success(t('Filière modifiée'));
     } else {
       const { error } = await supabase
         .from('specialties')
@@ -100,8 +103,8 @@ const AdminSpecialties = () => {
           allowed_subject_ids: formData.allowed_subject_ids,
         });
 
-      if (error) toast.error(error.message || 'Erreur création filière');
-      else toast.success('Filière créée');
+      if (error) toast.error(error.message || t('Erreur création filière'));
+      else toast.success(t('Filière créée'));
     }
 
     setShowDialog(false);
@@ -110,11 +113,13 @@ const AdminSpecialties = () => {
     fetchData();
   };
 
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const remove = async (id: string) => {
     const { error } = await supabase.from('specialties').delete().eq('id', id);
-    if (error) toast.error(error.message || 'Erreur suppression filière');
+    if (error) toast.error(error.message || t('Erreur suppression filière'));
     else {
-      toast.success('Filière supprimée');
+      toast.success(t('Filière supprimée'));
       fetchData();
     }
   };
@@ -137,42 +142,42 @@ const AdminSpecialties = () => {
   };
 
   return (
-    <AppLayout title="Gestion des Filières">
+    <AppLayout title={t('Gestion des Filières')}>
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <p className="text-muted-foreground">
-            {specialties.length} filière{specialties.length > 1 ? 's' : ''} configurée{specialties.length > 1 ? 's' : ''}
+            {specialties.length} {t('filière(s) configurée(s)')}
           </p>
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
               <Button className="gradient-primary" onClick={openCreate}>
                 <Plus className="w-4 h-4 mr-2" />
-                Créer une filière
+                {t('Créer une filière')}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{editing ? 'Modifier la filière' : 'Nouvelle filière'}</DialogTitle>
+                <DialogTitle>{editing ? t('Modifier la filière') : t('Nouvelle filière')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
-                  <Label>Nom</Label>
+                  <Label>{t('Nom')}</Label>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ex: Génie Logiciel"
+                    placeholder={t('Ex: Génie Logiciel')}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description</Label>
+                  <Label>{t('Description')}</Label>
                   <Input
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Description"
+                    placeholder={t('Description')}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Couleur</Label>
+                  <Label>{t('Couleur')}</Label>
                   <Input
                     type="color"
                     value={formData.color}
@@ -181,7 +186,7 @@ const AdminSpecialties = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Matières autorisées pour cette filière</Label>
+                  <Label>{t('Matières autorisées pour cette filière')}</Label>
                   <div className="space-y-2 max-h-40 overflow-auto border rounded-md p-3">
                     {subjects.map((subject) => {
                       const checked = formData.allowed_subject_ids.includes(subject.id);
@@ -198,7 +203,7 @@ const AdminSpecialties = () => {
                   </div>
                 </div>
                 <Button className="w-full gradient-primary" onClick={save}>
-                  {editing ? 'Modifier la filière' : 'Créer la filière'}
+                  {editing ? t('Modifier la filière') : t('Créer la filière')}
                 </Button>
               </div>
             </DialogContent>
@@ -207,9 +212,9 @@ const AdminSpecialties = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
-            <div className="col-span-full text-center py-12 text-muted-foreground">Chargement...</div>
+            <div className="col-span-full text-center py-12 text-muted-foreground">{t('Chargement...')}</div>
           ) : specialties.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-muted-foreground">Aucune filière configurée</div>
+            <div className="col-span-full text-center py-12 text-muted-foreground">{t('Aucune filière configurée')}</div>
           ) : (
             specialties.map((specialty) => (
               <Card key={specialty.id} className="bg-card border-border">
@@ -227,16 +232,16 @@ const AdminSpecialties = () => {
                         <p className="text-sm text-muted-foreground truncate">{specialty.description}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {(specialty.allowed_subject_ids || []).length} matière(s) autorisée(s)
+                        {(specialty.allowed_subject_ids || []).length} {t('matière(s) autorisée(s)')}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2 mt-4">
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(specialty)}>
                       <Edit className="w-4 h-4 mr-1" />
-                      Modifier
+                      {t('Modifier')}
                     </Button>
-                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => remove(specialty.id)}>
+                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(specialty.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -246,6 +251,13 @@ const AdminSpecialties = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={() => { if (deleteId) { remove(deleteId); setDeleteId(null); } }}
+        description="Êtes-vous sûr de vouloir supprimer cette filière ?"
+      />
     </AppLayout>
   );
 };

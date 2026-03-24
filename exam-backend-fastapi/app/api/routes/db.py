@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import Answer, Exam, ExamQuestion, Notification, Profile, Specialty, StudentProfile, Submission
+from app.models import Answer, AuditLog, Exam, ExamQuestion, Notification, Profile, Specialty, StudentProfile, Submission
 from app.schemas import DBDeleteIn, DBInsertIn, DBQueryIn, DBUpdateIn
 from app.services.db_ops import (
     DATETIME_COLUMNS,
@@ -24,6 +25,33 @@ from app.services.db_ops import (
 )
 
 router = APIRouter(prefix="/api/db", tags=["db"])
+
+
+def _write_audit(
+    db: Session,
+    *,
+    user: Profile,
+    action: str,
+    table: str,
+    row_id: str | None = None,
+    changes: dict | None = None,
+    ip: str | None = None,
+) -> None:
+    """Persist an immutable audit log entry. Errors are silenced to never break the main flow."""
+    try:
+        db.add(AuditLog(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            user_email=user.email,
+            action=action,
+            table_name=table,
+            row_id=row_id,
+            changes=json.dumps(changes, default=str) if changes else None,
+            ip_address=ip,
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def _student_exam_scope(db: Session, user_id: str):
@@ -125,6 +153,34 @@ def db_query(
         elif payload.table in {"classes", "class_students", "questions"}:
             raise HTTPException(status_code=403, detail="Accès refusé à cette ressource")
 
+    # Auto-clôturer les soumissions "en_cours" dont le délai est dépassé (vue professeur)
+    if payload.table == "submissions" and current_role == "professeur":
+        exam_id_filter = next((f.value for f in payload.filters if f.column == "exam_id"), None)
+        if exam_id_filter:
+            # exam_id_filter can be a single string (eq) or a list (in)
+            single_exam_id = exam_id_filter if isinstance(exam_id_filter, str) else (exam_id_filter[0] if isinstance(exam_id_filter, list) and len(exam_id_filter) == 1 else None)
+            now_utc = datetime.utcnow()
+            _exam_ac = db.query(Exam).filter(Exam.id == single_exam_id).first() if single_exam_id else None
+            if _exam_ac:
+                stale_subs = db.query(Submission).filter(
+                    Submission.exam_id == single_exam_id,
+                    Submission.status == "en_cours",
+                ).all()
+                _closed = False
+                for _ss in stale_subs:
+                    _dl_ac: datetime | None = None
+                    if _exam_ac.end_date:
+                        _dl_ac = _exam_ac.end_date.replace(tzinfo=None) if _exam_ac.end_date.tzinfo else _exam_ac.end_date
+                    elif _exam_ac.duration_minutes and _ss.started_at:
+                        _st_ac = _ss.started_at.replace(tzinfo=None) if _ss.started_at.tzinfo else _ss.started_at
+                        _dl_ac = _st_ac + timedelta(minutes=_exam_ac.duration_minutes + 2)
+                    if _dl_ac and now_utc > _dl_ac:
+                        _ss.status = "soumis"
+                        _ss.submitted_at = _ss.submitted_at or _dl_ac
+                        _closed = True
+                if _closed:
+                    db.commit()
+
     # Isolation professeur : ne voir que ses propres examens et ressources associées
     elif current_role == "professeur":
         if payload.table == "exams":
@@ -172,6 +228,7 @@ def db_query(
 @router.post("/insert")
 def db_insert(
     payload: DBInsertIn,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Profile = Depends(get_current_user),
 ):
@@ -200,6 +257,13 @@ def db_insert(
             exam_id = data.get("exam_id")
             if not exam_id or not _ensure_exam_allowed_for_student(db, current_user.id, exam_id):
                 raise HTTPException(status_code=403, detail="Épreuve non autorisée pour votre profil")
+            # Unicité : un étudiant ne peut avoir qu'une seule soumission par examen
+            existing_sub = db.query(Submission).filter(
+                Submission.exam_id == exam_id,
+                Submission.student_id == current_user.id,
+            ).first()
+            if existing_sub:
+                raise HTTPException(status_code=409, detail="Vous avez déjà une soumission pour cette épreuve")
             # Allowlist strict : l'étudiant ne peut pas se fixer un score ou un statut corrigé
             _SUBMISSION_INSERT_ALLOWED = {"id", "exam_id", "student_id", "started_at"}
             data = {k: v for k, v in data.items() if k in _SUBMISSION_INSERT_ALLOWED}
@@ -228,6 +292,10 @@ def db_insert(
         created_rows.append(serialize_row(obj))
 
     db.commit()
+    for row in created_rows:
+        _write_audit(db, user=current_user, action="insert", table=payload.table,
+                     row_id=row.get("id"), changes=row,
+                     ip=request.client.host if request.client else None)
     created_rows = hydrate_related(db, payload.table, created_rows)
     return {"data": created_rows, "error": None}
 
@@ -235,6 +303,7 @@ def db_insert(
 @router.post("/update")
 def db_update(
     payload: DBUpdateIn,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Profile = Depends(get_current_user),
 ):
@@ -285,6 +354,25 @@ def db_update(
             parsed_data = {k: v for k, v in parsed_data.items() if k in {"status", "incidents"}}
             if "status" in parsed_data and parsed_data["status"] not in {"en_cours", "soumis"}:
                 raise HTTPException(status_code=403, detail="Modification de statut non autorisée")
+            # Vérification côté serveur : délai de l'épreuve non dépassé
+            if parsed_data.get("status") == "soumis":
+                for row in rows:
+                    if row.exam_id and row.started_at:
+                        exam_timer_obj = db.query(Exam).filter(Exam.id == row.exam_id).first()
+                        if exam_timer_obj:
+                            _deadline = None
+                            if exam_timer_obj.end_date:
+                                _deadline = exam_timer_obj.end_date
+                            elif exam_timer_obj.duration_minutes:
+                                _started = row.started_at.replace(tzinfo=None) if row.started_at.tzinfo else row.started_at
+                                _deadline = _started + timedelta(minutes=exam_timer_obj.duration_minutes + 2)
+                            if _deadline:
+                                _dl_naive = _deadline.replace(tzinfo=None) if _deadline.tzinfo else _deadline
+                                if datetime.utcnow() > _dl_naive:
+                                    raise HTTPException(
+                                        status_code=403,
+                                        detail="Le délai de l'épreuve est dépassé. Votre copie ne peut plus être soumise."
+                                    )
         elif payload.table == "answers":
             parsed_data = {k: v for k, v in parsed_data.items() if k in {"answer_text"}}
         elif payload.table == "notifications":
@@ -325,6 +413,10 @@ def db_update(
         db.commit()
 
     updated = [serialize_row(r) for r in rows]
+    for row in updated:
+        _write_audit(db, user=current_user, action="update", table=payload.table,
+                     row_id=row.get("id"), changes={"updated_fields": list(parsed_data.keys())},
+                     ip=request.client.host if request.client else None)
     updated = hydrate_related(db, payload.table, updated)
     return {"data": updated, "error": None}
 
@@ -332,6 +424,7 @@ def db_update(
 @router.post("/delete")
 def db_delete(
     payload: DBDeleteIn,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Profile = Depends(get_current_user),
 ):
@@ -359,6 +452,9 @@ def db_delete(
         count = query.count()
         query.delete(synchronize_session=False)
         db.commit()
+        _write_audit(db, user=current_user, action="delete", table=payload.table,
+                     changes={"count": count},
+                     ip=request.client.host if request.client else None)
         return {"data": {"deleted": count}, "error": None}
 
     if current_role == "etudiant" and payload.table == "answers":
@@ -377,10 +473,16 @@ def db_delete(
         count = db.query(Answer).filter(Answer.id.in_(answer_ids)).count()
         db.query(Answer).filter(Answer.id.in_(answer_ids)).delete(synchronize_session=False)
         db.commit()
+        _write_audit(db, user=current_user, action="delete", table=payload.table,
+                     changes={"count": count},
+                     ip=request.client.host if request.client else None)
         return {"data": {"deleted": count}, "error": None}
 
     count = query.count()
     query.delete(synchronize_session=False)
     db.commit()
+    _write_audit(db, user=current_user, action="delete", table=payload.table,
+                 changes={"count": count},
+                 ip=request.client.host if request.client else None)
 
     return {"data": {"deleted": count}, "error": None}

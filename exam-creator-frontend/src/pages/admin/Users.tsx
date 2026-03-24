@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, KeyRound, UserX, UserCheck } from 'lucide-react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AdminUser, supabase } from '@/lib/backendClient';
+import { useLanguage } from '@/hooks/useLanguage';
 import { toast } from 'sonner';
 
 interface SignUpOptions {
@@ -22,6 +23,7 @@ interface SignUpOptions {
 }
 
 const AdminUsers = () => {
+  const { t } = useLanguage();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -139,6 +141,33 @@ const AdminUsers = () => {
     }
   };
 
+  const resetPassword = async (user: AdminUser) => {
+    const newPwd = window.prompt(`Nouveau mot de passe pour ${user.full_name || user.email} (min 8 caractères) :`);
+    if (!newPwd || newPwd.length < 8) {
+      if (newPwd !== null) toast.error('Mot de passe trop court (minimum 8 caractères)');
+      return;
+    }
+    const { error } = await supabase.auth.adminResetPassword(user.id, newPwd);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Mot de passe de ${user.full_name || user.email} réinitialisé`);
+    }
+  };
+
+  const toggleDisable = async (user: AdminUser) => {
+    const isDisabled = user.full_name?.startsWith('[DÉSACTIVÉ]');
+    const action = isDisabled ? 'réactiver' : 'désactiver';
+    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${user.full_name || user.email} ?`)) return;
+    const { error } = await supabase.auth.adminDisableUser(user.id, !isDisabled);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Compte ${action}`);
+      load();
+    }
+  };
+
   const filteredUsers = users.filter((user) =>
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
@@ -147,11 +176,11 @@ const AdminUsers = () => {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'admin':
-        return <Badge className="bg-destructive/20 text-destructive border-0">Admin</Badge>;
+        return <Badge className="bg-destructive/20 text-destructive border-0">{t('Admin')}</Badge>;
       case 'professeur':
-        return <Badge className="bg-primary/20 text-primary border-0">Professeur</Badge>;
+        return <Badge className="bg-primary/20 text-primary border-0">{t('Professeur')}</Badge>;
       default:
-        return <Badge className="bg-success/20 text-success border-0">Étudiant</Badge>;
+        return <Badge className="bg-success/20 text-success border-0">{t('Étudiant')}</Badge>;
     }
   };
 
@@ -160,23 +189,23 @@ const AdminUsers = () => {
       <div className="space-y-6 animate-fade-in">
         <Card>
           <CardHeader>
-            <CardTitle>Créer un utilisateur (admin)</CardTitle>
+            <CardTitle>{t('Créer un utilisateur (admin)')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
               <Input
-                placeholder="Nom complet"
+                placeholder={t('Nom complet')}
                 value={form.full_name}
                 onChange={(e) => setForm({ ...form, full_name: e.target.value })}
               />
               <Input
-                placeholder="Email"
+                placeholder={t('Email')}
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
               <Input
-                placeholder="Mot de passe"
+                placeholder={t('Mot de passe')}
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -189,9 +218,9 @@ const AdminUsers = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="etudiant">Étudiant</SelectItem>
-                  <SelectItem value="professeur">Professeur</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="etudiant">{t('Étudiant')}</SelectItem>
+                  <SelectItem value="professeur">{t('Professeur')}</SelectItem>
+                  <SelectItem value="admin">{t('Admin')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -199,13 +228,13 @@ const AdminUsers = () => {
             {form.role === 'etudiant' && (
               <div className="grid gap-3 md:grid-cols-3">
                 <Input
-                  placeholder="Matricule"
+                  placeholder={t('Matricule')}
                   value={form.student_number}
                   onChange={(e) => setForm({ ...form, student_number: e.target.value })}
                 />
                 <Select value={form.level_id} onValueChange={(value) => setForm({ ...form, level_id: value })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Niveau" />
+                    <SelectValue placeholder={t('Niveau')} />
                   </SelectTrigger>
                   <SelectContent>
                     {options.levels.map((level) => (
@@ -215,7 +244,7 @@ const AdminUsers = () => {
                 </Select>
                 <Select value={form.specialty_id} onValueChange={(value) => setForm({ ...form, specialty_id: value })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Spécialité" />
+                    <SelectValue placeholder={t('Spécialité')} />
                   </SelectTrigger>
                   <SelectContent>
                     {options.specialties.map((specialty) => (
@@ -226,14 +255,14 @@ const AdminUsers = () => {
               </div>
             )}
 
-            <Button disabled={saving} onClick={createUser}>Créer l'utilisateur</Button>
+            <Button disabled={saving} onClick={createUser}>{t('Créer l\'utilisateur')}</Button>
           </CardContent>
         </Card>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher un utilisateur..."
+            placeholder={t('Rechercher un utilisateur...')}
             className="pl-10"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -242,7 +271,7 @@ const AdminUsers = () => {
 
         <div className="space-y-2">
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Chargement...</div>
+            <div className="text-center py-12 text-muted-foreground">{t('Chargement...')}</div>
           ) : (
             filteredUsers.map((user) => (
               <Card key={user.id} className="bg-card border-border">
@@ -253,26 +282,47 @@ const AdminUsers = () => {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{user.full_name || 'Sans nom'}</p>
+                    <p className="font-medium text-foreground truncate">{user.full_name || t('Sans nom')}</p>
                     <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                     {user.student_profile && (
-                      <p className="text-xs text-muted-foreground truncate">Matricule: {user.student_profile.student_number}</p>
+                      <p className="text-xs text-muted-foreground truncate">{t('Matricule')}: {user.student_profile.student_number}</p>
                     )}
                   </div>
                   {getRoleBadge(user.role)}
-                  <Select
-                    value={user.role}
-                    onValueChange={(value: 'admin' | 'professeur' | 'etudiant') => updateUserRole(user, value)}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="etudiant">Étudiant</SelectItem>
-                      <SelectItem value="professeur">Professeur</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Select
+                      value={user.role}
+                      onValueChange={(value: 'admin' | 'professeur' | 'etudiant') => updateUserRole(user, value)}
+                    >
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="etudiant">{t('Étudiant')}</SelectItem>
+                        <SelectItem value="professeur">{t('Professeur')}</SelectItem>
+                        <SelectItem value="admin">{t('Admin')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => resetPassword(user)}
+                      title={t('Réinitialiser le mot de passe')}
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleDisable(user)}
+                      title={user.full_name?.startsWith('[DÉSACTIVÉ]') ? 'Réactiver le compte' : 'Désactiver le compte'}
+                      className={user.full_name?.startsWith('[DÉSACTIVÉ]') ? 'text-green-600' : 'text-destructive'}
+                    >
+                      {user.full_name?.startsWith('[DÉSACTIVÉ]')
+                        ? <UserCheck className="w-3.5 h-3.5" />
+                        : <UserX className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))

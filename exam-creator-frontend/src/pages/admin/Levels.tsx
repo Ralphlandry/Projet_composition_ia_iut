@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
+import { useLanguage } from '@/hooks/useLanguage';
 import AppLayout from '@/components/layout/AppLayout';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +24,7 @@ interface Level {
 }
 
 const AdminLevels = () => {
+  const { t } = useLanguage();
   const [levels, setLevels] = useState<Level[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -48,7 +51,7 @@ const AdminLevels = () => {
 
   const saveLevel = async () => {
     if (!formData.name.trim()) {
-      toast.error('Veuillez entrer un nom');
+      toast.error(t('Veuillez entrer un nom'));
       return;
     }
 
@@ -62,9 +65,9 @@ const AdminLevels = () => {
         .eq('id', editingLevel.id);
 
       if (error) {
-        toast.error('Erreur lors de la modification');
+        toast.error(t('Erreur lors de la modification'));
       } else {
-        toast.success('Niveau modifié');
+        toast.success(t('Niveau modifié'));
       }
     } else {
       const { error } = await supabase.from('levels').insert({
@@ -73,9 +76,9 @@ const AdminLevels = () => {
       });
 
       if (error) {
-        toast.error('Erreur lors de la création');
+        toast.error(t('Erreur lors de la création'));
       } else {
-        toast.success('Niveau créé');
+        toast.success(t('Niveau créé'));
       }
     }
 
@@ -85,12 +88,14 @@ const AdminLevels = () => {
     fetchLevels();
   };
 
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const deleteLevel = async (id: string) => {
     const { error } = await supabase.from('levels').delete().eq('id', id);
     if (error) {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('Erreur lors de la suppression'));
     } else {
-      toast.success('Niveau supprimé');
+      toast.success(t('Niveau supprimé'));
       fetchLevels();
     }
   };
@@ -111,45 +116,45 @@ const AdminLevels = () => {
   };
 
   return (
-    <AppLayout title="Gestion des Niveaux">
+    <AppLayout title={t('Gestion des Niveaux')}>
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
           <p className="text-muted-foreground">
-            {levels.length} niveau{levels.length > 1 ? 'x' : ''} configuré{levels.length > 1 ? 's' : ''}
+            {levels.length} {t('niveau(x) configuré(s)')}
           </p>
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
               <Button className="gradient-primary" onClick={openCreateDialog}>
                 <Plus className="w-4 h-4 mr-2" />
-                Ajouter
+                {t('Ajouter')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  {editingLevel ? 'Modifier le niveau' : 'Nouveau niveau'}
+                  {editingLevel ? t('Modifier le niveau') : t('Nouveau niveau')}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Nom</Label>
+                  <Label>{t('Nom')}</Label>
                   <Input
-                    placeholder="Ex: IUT Niv. 1"
+                    placeholder={t('Ex: IUT Niv. 1')}
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description</Label>
+                  <Label>{t('Description')}</Label>
                   <Input
-                    placeholder="Description du niveau"
+                    placeholder={t('Description du niveau')}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
                 </div>
                 <Button onClick={saveLevel} className="w-full gradient-primary">
-                  {editingLevel ? 'Modifier' : 'Créer'}
+                  {editingLevel ? t('Modifier') : t('Créer')}
                 </Button>
               </div>
             </DialogContent>
@@ -160,11 +165,11 @@ const AdminLevels = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
-              Chargement...
+              {t('Chargement...')}
             </div>
           ) : levels.length === 0 ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
-              Aucun niveau configuré
+              {t('Aucun niveau configuré')}
             </div>
           ) : (
             levels.map((level) => (
@@ -191,13 +196,13 @@ const AdminLevels = () => {
                       onClick={() => openEditDialog(level)}
                     >
                       <Edit className="w-4 h-4 mr-1" />
-                      Modifier
+                      {t('Modifier')}
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
                       className="text-destructive hover:text-destructive"
-                      onClick={() => deleteLevel(level.id)}
+                      onClick={() => setDeleteId(level.id)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -208,6 +213,13 @@ const AdminLevels = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={() => { if (deleteId) { deleteLevel(deleteId); setDeleteId(null); } }}
+        description="Êtes-vous sûr de vouloir supprimer ce niveau ?"
+      />
     </AppLayout>
   );
 };

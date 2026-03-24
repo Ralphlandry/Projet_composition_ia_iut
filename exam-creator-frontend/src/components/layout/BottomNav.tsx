@@ -2,20 +2,22 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, FileText, BarChart3, Settings, ClipboardCheck, Table2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const BottomNav = () => {
   const { isProfesseur } = useAuth();
+  const { t } = useLanguage();
 
   const navItems = isProfesseur ? [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de Bord' },
-    { to: '/exams', icon: FileText, label: 'Épreuves' },
-    { to: '/grades/subject', icon: ClipboardCheck, label: 'Notes' },
-    { to: '/grades/all-subjects', icon: Table2, label: 'Global' },
+    { to: '/dashboard', icon: LayoutDashboard, label: t('Tableau de Bord') },
+    { to: '/exams', icon: FileText, label: t('Epreuves') },
+    { to: '/grades/subject', icon: ClipboardCheck, label: t('Notes') },
+    { to: '/grades/all-subjects', icon: Table2, label: t('Global') },
   ] : [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Accueil' },
-    { to: '/my-exams', icon: FileText, label: 'Épreuves' },
-    { to: '/my-results', icon: BarChart3, label: 'Résultats' },
-    { to: '/profile', icon: Settings, label: 'Profil' },
+    { to: '/dashboard', icon: LayoutDashboard, label: t('Accueil') },
+    { to: '/my-exams', icon: FileText, label: t('Epreuves') },
+    { to: '/my-results', icon: BarChart3, label: t('Résultats') },
+    { to: '/profile', icon: Settings, label: t('Profil') },
   ];
 
   return (
