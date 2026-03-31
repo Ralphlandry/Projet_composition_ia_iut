@@ -42,7 +42,7 @@ export function useNotificationSSE(userId: string | undefined) {
       es.close();
       esRef.current = null;
     };
-  }, [userId, token]);
+  }, [userId]);
 
   return unreadCount;
 }
