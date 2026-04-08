@@ -17,6 +17,7 @@ class Settings:
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "change-me")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
+    ollama_url: str = os.getenv("OLLAMA_URL", "http://localhost:11434")
     cors_origins: list[str] = field(
         default_factory=lambda: [
             origin.strip()

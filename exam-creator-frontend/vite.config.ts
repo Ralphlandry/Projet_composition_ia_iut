@@ -7,6 +7,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "0.0.0.0",
     port: 8080,
+    strictPort: true,
+    hmr: {
+      host: "localhost",
+      port: 8080,
+      protocol: "ws",
+      clientPort: 8080,
+    },
+    watch: {
+      usePolling: true,
+    },
   },
   plugins: [react()].filter(Boolean),
   resolve: {

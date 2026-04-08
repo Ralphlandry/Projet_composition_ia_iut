@@ -17,6 +17,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -82,7 +83,10 @@ const toLocalISO = (d: Date): string => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
-const getQuestionTypeLabel = (questionType: QuestionType, t: (s: string) => string) => {
+const getQuestionTypeLabel = (
+  questionType: QuestionType,
+  t: (s: string) => string = (value) => value,
+) => {
   if (questionType === 'qcm') return 'QCM';
   if (questionType === 'vrai_faux') return t('Vrai/Faux');
   if (questionType === 'reponse_courte') return t('Réponse courte');
@@ -1032,6 +1036,9 @@ const CreateExam = () => {
                 <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>{editingQuestionIndex === null ? t('Nouvelle question') : t('Modifier la question')}</DialogTitle>
+                    <DialogDescription>
+                      {t('Renseignez les informations de la question puis enregistrez-la dans la partie choisie.')}
+                    </DialogDescription>
                   </DialogHeader>
 
                   <div className="space-y-4 pt-4">
@@ -1172,7 +1179,7 @@ const CreateExam = () => {
                             <p className="font-medium text-foreground">{q.question_text}</p>
                             <div className="flex items-center gap-2">
                               <p className="text-sm text-muted-foreground">
-                                {getQuestionTypeLabel(q.question_type)}
+                                {getQuestionTypeLabel(q.question_type, t)}
                                 {' · '}
                                 {q.points} point{q.points > 1 ? 's' : ''}
                               </p>
@@ -1257,6 +1264,9 @@ const CreateExam = () => {
           <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('Aperçu final par parties')}</DialogTitle>
+              <DialogDescription>
+                {t('Vérifiez les informations de l’épreuve et le contenu des questions avant de publier.')}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -1300,7 +1310,7 @@ const CreateExam = () => {
                               <div key={`preview-q-${part.local_id}-${qIndex}`} className="p-3 rounded-md bg-secondary/70">
                                 <p className="text-sm font-medium">Q{qIndex + 1}. {q.question_text}</p>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  {getQuestionTypeLabel(q.question_type)} • {q.points} point(s)
+                                  {getQuestionTypeLabel(q.question_type, t)} • {q.points} point(s)
                                 </p>
                               </div>
                             ))}

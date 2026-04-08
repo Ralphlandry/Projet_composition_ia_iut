@@ -26,7 +26,7 @@ const Header = ({ title }: HeaderProps) => {
   // SSE real-time count (updates within ~5s without polling)
   const sseCount = useNotificationSSE(user?.id);
   useEffect(() => {
-    if (sseCount > 0) setUnreadCount(sseCount);
+    setUnreadCount(sseCount);
   }, [sseCount]);
 
   const getToastFn = (type: string) => {
@@ -92,9 +92,16 @@ const Header = ({ title }: HeaderProps) => {
 
   // Initial fetch + poll every 60s, pausing when tab is hidden
   useVisibilityPolling(fetchNotifications, 60000, !!user);
-  // Also run once on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useState(() => { fetchNotifications(); });
+
+  useEffect(() => {
+    if (!user) return;
+    void fetchNotifications();
+  }, [user, fetchNotifications]);
+
+  useEffect(() => {
+    if (!user || sseCount <= 0) return;
+    void fetchNotifications();
+  }, [user, sseCount, fetchNotifications]);
 
   const getInitials = () => {
     if (!user?.email) return 'U';

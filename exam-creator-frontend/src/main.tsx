@@ -3,6 +3,28 @@ import { Component, ErrorInfo, ReactNode } from "react";
 import App from "./App.tsx";
 import "./index.css";
 
+if (
+  typeof window !== "undefined" &&
+  "serviceWorker" in navigator &&
+  ["localhost", "127.0.0.1"].includes(window.location.hostname)
+) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister();
+    });
+  });
+
+  if ("caches" in window) {
+    caches.keys().then((keys) => {
+      keys
+        .filter((key) => key.startsWith("evalpro-"))
+        .forEach((key) => {
+          caches.delete(key);
+        });
+    });
+  }
+}
+
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
     super(props);

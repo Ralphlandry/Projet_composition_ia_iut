@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -135,6 +136,9 @@ const AdminLevels = () => {
                 <DialogTitle>
                   {editingLevel ? t('Modifier le niveau') : t('Nouveau niveau')}
                 </DialogTitle>
+                <DialogDescription>
+                  {t('Renseignez le nom et la description du niveau, puis validez pour enregistrer.')}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">

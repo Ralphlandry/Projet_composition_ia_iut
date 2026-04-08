@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, is_password_too_long, verify_password
 from app.db.session import get_db
-from app.models import AuditLog, Level, Profile, Specialty, StudentProfile, Subject, UserRole
+from app.models import AuditLog, Level, Notification, Profile, Specialty, StudentProfile, Subject, UserRole
 from app.schemas import AdminCreateUserIn, AdminDisableUserIn, AdminResetPasswordIn, AdminUpdateRoleIn, SessionOut, SignInIn, SignUpIn, UserOut
 from app.services.db_ops import get_user_role
 
@@ -31,6 +31,10 @@ def _check_rate_limit(ip: str) -> None:
     _login_attempts[ip].append(now)
 
 
+def _reset_rate_limit(ip: str) -> None:
+    _login_attempts.pop(ip, None)
+
+
 def _ensure_valid_student_dependencies(db: Session, level_id: str | None, specialty_id: str | None) -> None:
     level = db.query(Level).filter(Level.id == level_id).first()
     if not level:
@@ -39,6 +43,38 @@ def _ensure_valid_student_dependencies(db: Session, level_id: str | None, specia
     specialty = db.query(Specialty).filter(Specialty.id == specialty_id).first()
     if not specialty:
         raise HTTPException(status_code=400, detail="Spécialité étudiante invalide")
+
+
+def _create_welcome_notification(db: Session, user: Profile, role: str) -> None:
+    existing = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user.id,
+            Notification.title == "Bienvenue sur EvalPro",
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    role_label = {
+        "admin": "administrateur",
+        "professeur": "professeur",
+        "etudiant": "étudiant",
+    }.get(role, "utilisateur")
+
+    db.add(
+        Notification(
+            user_id=user.id,
+            title="Bienvenue sur EvalPro",
+            message=(
+                f"Bonjour {user.full_name or user.email}, votre compte {role_label} est prêt. "
+                "Vous recevrez ici les informations importantes sur vos épreuves et votre activité."
+            ),
+            type="success",
+            is_read=False,
+        )
+    )
 
 
 def _create_user_with_role(db: Session, payload: AdminCreateUserIn | SignUpIn) -> Profile:
@@ -86,6 +122,8 @@ def _create_user_with_role(db: Session, payload: AdminCreateUserIn | SignUpIn) -
             )
         )
 
+    _create_welcome_notification(db, user, payload.role)
+
     db.commit()
     return user
 
@@ -111,7 +149,8 @@ def signup(payload: SignUpIn, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=SessionOut)
 def login(request: Request, payload: SignInIn, db: Session = Depends(get_db)):
-    _check_rate_limit(request.client.host if request.client else "unknown")
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
     if is_password_too_long(payload.password):
         raise HTTPException(status_code=400, detail="Mot de passe trop long (maximum 72 octets)")
 
@@ -122,6 +161,7 @@ def login(request: Request, payload: SignInIn, db: Session = Depends(get_db)):
     if user.password_hash.startswith("<disabled>"):
         raise HTTPException(status_code=403, detail="Ce compte a été désactivé. Contactez l'administrateur.")
 
+    _reset_rate_limit(client_ip)
     token = create_access_token(subject=user.id)
     return SessionOut(access_token=token, user=UserOut(id=user.id, email=user.email, full_name=user.full_name))
 

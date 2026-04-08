@@ -145,7 +145,6 @@ export const EN: Record<string, string> = {
   'Votre réponse': 'Your answer',
   'Réponse correcte': 'Correct answer',
   'Pas de réponse': 'No answer',
-  'Mes épreuves': 'My exams',
   'Tous mes résultats': 'All my results',
 
   // ── ExamSubmissions ──────────────────────────────────────
@@ -212,9 +211,7 @@ export const EN: Record<string, string> = {
   'Votre note est définitive': 'Your grade is final',
 
   // ── Analytics ────────────────────────────────────────────
-  'Analytiques': 'Analytics',
   'Moyenne par matière': 'Average by subject',
-  'Taux de réussite': 'Pass rate',
   'Progression': 'Progress',
   'Résultats globaux': 'Overall results',
 
@@ -258,7 +255,6 @@ export const EN: Record<string, string> = {
   'Apparence': 'Appearance',
   'Mode sombre': 'Dark mode',
   'Utiliser le thème sombre de l\'application': 'Use the dark theme',
-  'Notifications push': 'Push notifications',
   'Recevoir des notifications dans l\'application': 'Receive in-app notifications',
   'Notifications par email': 'Email notifications',
   'Recevoir des emails pour les événements importants': 'Receive emails for important events',
@@ -275,7 +271,6 @@ export const EN: Record<string, string> = {
   // ── Admin Dashboard ────────────────────────────────────────
   'Panneau d\'Administration': 'Administration Panel',
   'Vue d\'ensemble de la plateforme EvalPro.': 'Overview of the EvalPro platform.',
-  'Soumissions': 'Submissions',
   'Copies rendues': 'Papers submitted',
   'Derniers inscrits': 'Recent registrations',
   'Aucun utilisateur.': 'No users.',
@@ -285,7 +280,6 @@ export const EN: Record<string, string> = {
   'Gerer les matieres': 'Manage subjects',
   'Gerer les niveaux': 'Manage levels',
   'Envoyer une notification': 'Send notification',
-  'Professeur': 'Professor',
   'Etudiant': 'Student',
 
   // ── Page Titles (AppLayout) ────────────────────────────────
@@ -336,12 +330,9 @@ export const EN: Record<string, string> = {
   'Epreuves Actives': 'Active Exams',
   'Aucune epreuve publiee': 'No published exams',
   'en cours': 'in progress',
-  'Corrections en attente': 'Pending corrections',
   'Epreuves Creees': 'Created Exams',
   'Epreuves Disponibles': 'Available Exams',
   'Nouvelle': 'New',
-  'Publié': 'Published',
-  'Brouillon': 'Draft',
 
   // ── Admin CRUD pages ───────────────────────────────────────
   'Créer une matière': 'Create subject',
@@ -399,11 +390,9 @@ export const EN: Record<string, string> = {
   'Tout sélectionner': 'Select all',
   'Envoyer la notification': 'Send notification',
   'Envoi en cours...': 'Sending...',
-  'Sans nom': 'No name',
   'Filtrer par rôle:': 'Filter by role:',
   'Admins': 'Admins',
   'Professeurs': 'Professors',
-  'Étudiants': 'Students',
   'Aucun utilisateur trouvé': 'No users found',
 
   // ── AuditLogs page ─────────────────────────────────────────
@@ -431,13 +420,9 @@ export const EN: Record<string, string> = {
   'brouillon': 'draft',
   'programme': 'scheduled',
   'Aucune épreuve trouvée': 'No exams found',
-  'Archivé': 'Archived',
-  'Matière': 'Subject',
-  'Statut': 'Status',
   'Filière non définie': 'Program not set',
   'Type non défini': 'Type not set',
   'Semestre non défini': 'Semester not set',
-  'Voir les soumissions': 'View submissions',
 
   // ── MyExams page ───────────────────────────────────────────
   'Commencer': 'Start',
@@ -448,7 +433,6 @@ export const EN: Record<string, string> = {
   'Terminé': 'Ended',
   'À venir': 'Upcoming',
   'Disponible': 'Available',
-  'Note provisoire': 'Provisional grade',
   'Aucune épreuve disponible pour le moment': 'No exams available at the moment',
   'min': 'min',
   'pts': 'pts',
@@ -460,24 +444,19 @@ export const EN: Record<string, string> = {
   'Épreuves passées': 'Exams taken',
   'Corrigées': 'Graded',
   'Provisoires': 'Provisional',
-  'Détails': 'Details',
   'Détails (verrouillé)': 'Details (locked)',
   'Détails de la correction': 'Grading details',
   'En attente IA': 'AI pending',
-  'Soumis le': 'Submitted on',
 
   // ── Users page ─────────────────────────────────────────────
   'Créer l\'utilisateur': 'Create user',
   'Créer un utilisateur (admin)': 'Create user (admin)',
-  'Rechercher un utilisateur...': 'Search user...',
-  'Réinitialiser le mot de passe': 'Reset password',
   'Voir': 'View',
   'Tout voir': 'View all',
 
   // ── Grades pages ─────────────────────────────────────────────
   'Consulter les notes d\'une matière': 'View grades for a subject',
   'Sélectionnez le niveau, la filière et la matière pour afficher les notes de tous les étudiants, classées par ordre alphabétique.': 'Select the level, program and subject to display all student grades in alphabetical order.',
-  'Notes par matière': 'Grades by subject',
   'Vue globale des notes': 'All subjects grades',
   'Consultez les notes de toutes les matières pour l\'ensemble des étudiants d\'un niveau et d\'une filière, classées par ordre alphabétique.': 'View grades for all subjects for students in a level and program, sorted alphabetically.',
   'Afficher les notes': 'Show grades',
@@ -513,23 +492,15 @@ export const EN: Record<string, string> = {
 
   // ── ExamSubmissions page ─────────────────────────────────────
   'Erreur lors du chargement': 'Error loading',
-  'Retour': 'Back',
-  'Exporter': 'Export',
   'Export Excel téléchargé': 'Excel export downloaded',
   'Export PDF téléchargé': 'PDF export downloaded',
   'Exporté le': 'Exported on',
-  'Étudiants': 'Students',
-  'A valider': 'To validate',
   'Corrigés': 'Graded',
-  'Soumissions des étudiants': 'Student submissions',
-  'Aucune soumission pour cette épreuve': 'No submissions for this exam',
   'Non soumis': 'Not submitted',
   'Incidents réseau': 'Network incidents',
   'enregistré': 'recorded',
-  'Corriger': 'Grade',
 
   // ── Corrections page ─────────────────────────────────────────
-  'Correction': 'Grading',
   'Soumission non trouvée': 'Submission not found',
   'Lancer correction IA': 'Run AI grading',
   'Correction IA...': 'AI grading...',
@@ -546,11 +517,8 @@ export const EN: Record<string, string> = {
   'Réponse de l\'étudiant :': 'Student answer:',
   'Analyse IA — proposition :': 'AI analysis — suggestion:',
   'Appliquer': 'Apply',
-  'Points attribués': 'Points awarded',
   'Feedback': 'Feedback',
   'Commentaire pour l\'étudiant...': 'Comment for the student...',
-  'Valider la correction': 'Validate grading',
-  'Soumis le': 'Submitted on',
   'Analyse IA': 'AI analysis',
 
   // ── TakeExam page ────────────────────────────────────────────
@@ -676,7 +644,6 @@ export const EN: Record<string, string> = {
   'Profil mis à jour': 'Profile updated',
   'Erreur lors de la mise à jour': 'Error updating',
   'L\'email ne peut pas être modifié': 'Email cannot be changed',
-  'Informations personnelles': 'Personal information',
   'Se déconnecter': 'Sign out',
   'Se déconnecter de l\'application': 'Sign out of the application',
 
@@ -761,7 +728,6 @@ export const EN: Record<string, string> = {
   'Filière': 'Program',
   'Matières': 'Subjects',
   'N°': 'No.',
-  'Retour': 'Back',
 
   // ── Additional missing keys ──────────────────────────────────
   'Ajoutez manuellement ou importez un PDF puis modifiez si nécessaire.': 'Add manually or import a PDF and edit as needed.',

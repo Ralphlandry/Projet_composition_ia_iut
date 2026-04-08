@@ -1,0 +1,93 @@
+name: evalpro
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: evalpro-postgres
+    environment:
+      POSTGRES_DB: exam_creator
+      POSTGRES_USER: exam_user
+      POSTGRES_PASSWORD: exam_pass_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exam_user -d exam_creator"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./exam-backend-fastapi
+      dockerfile: Dockerfile
+    container_name: evalpro-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://exam_user:exam_pass_123@postgres:5432/exam_creator
+      JWT_SECRET_KEY: change-me-in-production
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 1440
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173
+      OLLAMA_URL: http://ollama:11434
+      IA_API_URL: http://ia:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./exam-creator-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8001
+    container_name: evalpro-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: evalpro-ollama
+    profiles: ["ai"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: evalpro-ollama-pull
+    profiles: ["ai"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      - ollama
+    entrypoint: ["/bin/sh", "-lc", "sleep 15; ollama pull qwen2.5:3b"]
+    restart: "no"
+
+  ia:
+    build:
+      context: ./ia
+      dockerfile: Dockerfile
+    container_name: evalpro-ia
+    profiles: ["ai"]
+    environment:
+      OLLAMA_URL: http://ollama:11434/api/generate
+      OLLAMA_MODEL: qwen2.5:3b
+    depends_on:
+      - ollama
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ollama_data:

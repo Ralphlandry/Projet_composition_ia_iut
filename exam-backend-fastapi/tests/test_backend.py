@@ -195,7 +195,7 @@ class TestIntegrationAuth:
     def test_query_without_token_forbidden(self):
         import httpx
         r = httpx.post(f"{BASE_URL}/api/db/query", json={"table": "exams"})
-        assert r.status_code == 403
+        assert r.status_code == 401
 
     def test_signup_admin_blocked(self):
         """L'auto-inscription avec rôle admin doit être refusée."""
@@ -206,4 +206,227 @@ class TestIntegrationAuth:
             "role": "admin",
         })
         assert r.status_code == 403
+
+
+@integration
+class TestIntegrationNotifications:
+    def _admin_headers(self):
+        import httpx
+
+        response = httpx.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "admin@iut.com", "password": "admin123"},
+        )
+        if response.status_code != 200:
+            pytest.skip("Compte admin de démonstration indisponible pour ce test d'intégration")
+
+        token = response.json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_new_student_gets_welcome_notification(self):
+        import httpx
+
+        headers = self._admin_headers()
+        users_response = httpx.get(f"{BASE_URL}/api/auth/admin/users", headers=headers)
+        assert users_response.status_code == 200
+
+        first_student = next((u for u in users_response.json()["users"] if u["role"] == "etudiant"), None)
+        assert first_student is not None
+
+        suffix = str(int(time.time()))
+        create_response = httpx.post(
+            f"{BASE_URL}/api/auth/admin/users",
+            headers=headers,
+            json={
+                "email": f"notif.test.{suffix}@example.com",
+                "password": "TestPass123!",
+                "full_name": "Notif Test",
+                "role": "etudiant",
+                "student_number": f"NT{suffix}",
+                "level_id": first_student["student_profile"]["level_id"],
+                "specialty_id": first_student["student_profile"]["specialty_id"],
+            },
+        )
+        assert create_response.status_code == 200, create_response.text
+
+        user_id = create_response.json()["user"]["id"]
+        notif_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "notifications",
+                "filters": [{"column": "user_id", "op": "eq", "value": user_id}],
+            },
+        )
+        assert notif_response.status_code == 200, notif_response.text
+        notifications = notif_response.json()["data"]
+        assert any("Bienvenue" in item["title"] for item in notifications)
+
+    def test_publishing_exam_creates_student_notification(self):
+        import httpx
+
+        headers = self._admin_headers()
+        users_response = httpx.get(f"{BASE_URL}/api/auth/admin/users", headers=headers)
+        assert users_response.status_code == 200
+
+        first_student = next((u for u in users_response.json()["users"] if u["role"] == "etudiant"), None)
+        assert first_student is not None
+
+        student_id = first_student["id"]
+        student_profile = first_student["student_profile"]
+
+        before_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "notifications",
+                "filters": [{"column": "user_id", "op": "eq", "value": student_id}],
+            },
+        )
+        assert before_response.status_code == 200, before_response.text
+        before_count = len(before_response.json()["data"])
+
+        specialties_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "specialties",
+                "filters": [{"column": "id", "op": "eq", "value": student_profile["specialty_id"]}],
+            },
+        )
+        assert specialties_response.status_code == 200, specialties_response.text
+        specialty = specialties_response.json()["data"][0]
+        subject_id = specialty["allowed_subject_ids"][0]
+
+        exam_response = httpx.post(
+            f"{BASE_URL}/api/db/insert",
+            headers=headers,
+            json={
+                "table": "exams",
+                "data": {
+                    "title": f"ZZ Test notif publication {int(time.time())}",
+                    "description": "test notification publication",
+                    "subject_id": subject_id,
+                    "specialty_id": student_profile["specialty_id"],
+                    "level_id": student_profile["level_id"],
+                    "evaluation_type": "controle",
+                    "semester": "S1",
+                    "duration_minutes": 30,
+                    "total_points": 20,
+                    "status": "publie",
+                    "created_by": student_id,
+                },
+            },
+        )
+        assert exam_response.status_code == 200, exam_response.text
+
+        after_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "notifications",
+                "filters": [{"column": "user_id", "op": "eq", "value": student_id}],
+            },
+        )
+        assert after_response.status_code == 200, after_response.text
+        after_count = len(after_response.json()["data"])
+
+        assert after_count > before_count
+
+    def test_professor_programming_exam_notifies_admin(self):
+        import httpx
+
+        headers = self._admin_headers()
+        admin_login = httpx.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": "admin@iut.com", "password": "admin123"},
+        )
+        assert admin_login.status_code == 200, admin_login.text
+        admin_user_id = admin_login.json()["user"]["id"]
+
+        users_response = httpx.get(f"{BASE_URL}/api/auth/admin/users", headers=headers)
+        assert users_response.status_code == 200
+        first_student = next((u for u in users_response.json()["users"] if u["role"] == "etudiant"), None)
+        assert first_student is not None
+
+        suffix = str(int(time.time()))
+        teacher_email = f"prof.notif.{suffix}@example.com"
+        create_prof_response = httpx.post(
+            f"{BASE_URL}/api/auth/admin/users",
+            headers=headers,
+            json={
+                "email": teacher_email,
+                "password": "TeacherPass123!",
+                "full_name": "Prof Notification",
+                "role": "professeur",
+            },
+        )
+        assert create_prof_response.status_code == 200, create_prof_response.text
+
+        teacher_login = httpx.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": teacher_email, "password": "TeacherPass123!"},
+        )
+        assert teacher_login.status_code == 200, teacher_login.text
+        teacher_headers = {"Authorization": f"Bearer {teacher_login.json()['access_token']}"}
+
+        specialty_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "specialties",
+                "filters": [{"column": "id", "op": "eq", "value": first_student["student_profile"]["specialty_id"]}],
+            },
+        )
+        assert specialty_response.status_code == 200, specialty_response.text
+        specialty = specialty_response.json()["data"][0]
+        subject_id = specialty["allowed_subject_ids"][0]
+
+        before_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "notifications",
+                "filters": [{"column": "user_id", "op": "eq", "value": admin_user_id}],
+            },
+        )
+        assert before_response.status_code == 200, before_response.text
+        before_count = len(before_response.json()["data"])
+
+        schedule_response = httpx.post(
+            f"{BASE_URL}/api/db/insert",
+            headers=teacher_headers,
+            json={
+                "table": "exams",
+                "data": {
+                    "title": f"ZZ Test notif admin {suffix}",
+                    "description": "test notification admin",
+                    "subject_id": subject_id,
+                    "specialty_id": first_student["student_profile"]["specialty_id"],
+                    "level_id": first_student["student_profile"]["level_id"],
+                    "evaluation_type": "controle",
+                    "semester": "S1",
+                    "duration_minutes": 30,
+                    "total_points": 20,
+                    "status": "programme",
+                    "start_date": "2030-01-01T10:00:00",
+                    "created_by": create_prof_response.json()["user"]["id"],
+                },
+            },
+        )
+        assert schedule_response.status_code == 200, schedule_response.text
+
+        after_response = httpx.post(
+            f"{BASE_URL}/api/db/query",
+            headers=headers,
+            json={
+                "table": "notifications",
+                "filters": [{"column": "user_id", "op": "eq", "value": admin_user_id}],
+            },
+        )
+        assert after_response.status_code == 200, after_response.text
+        notifications = after_response.json()["data"]
+
+        assert len(notifications) > before_count
+        assert any("enseignant" in item["title"].lower() for item in notifications)
 

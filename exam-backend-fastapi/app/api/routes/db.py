@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import Answer, AuditLog, Exam, ExamQuestion, Notification, Profile, Specialty, StudentProfile, Submission
+from app.models import Answer, AuditLog, Exam, ExamQuestion, Notification, Profile, Specialty, StudentProfile, Submission, UserRole
 from app.schemas import DBDeleteIn, DBInsertIn, DBQueryIn, DBUpdateIn
 from app.services.db_ops import (
     DATETIME_COLUMNS,
@@ -82,6 +82,103 @@ def _ensure_exam_allowed_for_student(db: Session, user_id: str, exam_id: str) ->
     return scoped.filter(Exam.id == exam_id).first() is not None
 
 
+def _create_notification_if_missing(
+    db: Session,
+    *,
+    user_id: str,
+    title: str,
+    message: str,
+    notif_type: str = "info",
+) -> bool:
+    existing = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user_id,
+            Notification.title == title,
+            Notification.message == message,
+        )
+        .first()
+    )
+    if existing:
+        return False
+
+    db.add(
+        Notification(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            title=title,
+            message=message,
+            type=notif_type,
+            is_read=False,
+        )
+    )
+    return True
+
+
+def _notify_students_for_exam_publication(db: Session, exam_row: Exam) -> int:
+    if not exam_row.specialty_id or not exam_row.level_id:
+        return 0
+
+    students = db.query(StudentProfile).filter(
+        StudentProfile.specialty_id == exam_row.specialty_id,
+        StudentProfile.level_id == exam_row.level_id,
+    ).all()
+
+    if not students:
+        return 0
+
+    title = "Nouvelle épreuve disponible"
+    message = f"L'épreuve « {exam_row.title} » vient d'être publiée. Connectez-vous pour la consulter."
+
+    created = 0
+    for student_profile in students:
+        if not student_profile.user_id:
+            continue
+        if _create_notification_if_missing(
+            db,
+            user_id=student_profile.user_id,
+            title=title,
+            message=message,
+            notif_type="info",
+        ):
+            created += 1
+
+    return created
+
+
+def _notify_admins_for_exam_action(db: Session, exam_row: Exam, actor: Profile, actor_role: str, action: str) -> int:
+    if actor_role != "professeur":
+        return 0
+
+    admin_ids = [row[0] for row in db.query(UserRole.user_id).filter(UserRole.role == "admin").all()]
+    if not admin_ids:
+        return 0
+
+    actor_name = actor.full_name or actor.email or "Un enseignant"
+    if action == "programme":
+        title = "Épreuve programmée par un enseignant"
+        schedule_suffix = f" pour le {exam_row.start_date.strftime('%d/%m/%Y à %H:%M')}" if exam_row.start_date else ""
+        message = f"{actor_name} a programmé l'épreuve « {exam_row.title} »{schedule_suffix}."
+    else:
+        title = "Épreuve publiée par un enseignant"
+        message = f"{actor_name} a publié l'épreuve « {exam_row.title} » et elle est maintenant disponible."
+
+    created = 0
+    for admin_id in admin_ids:
+        if not admin_id:
+            continue
+        if _create_notification_if_missing(
+            db,
+            user_id=admin_id,
+            title=title,
+            message=message,
+            notif_type="info",
+        ):
+            created += 1
+
+    return created
+
+
 @router.post("/query")
 def db_query(
     payload: DBQueryIn,
@@ -101,21 +198,7 @@ def db_query(
         if pending:
             for exam_row in pending:
                 exam_row.status = "publie"
-                # Notifier tous les étudiants concernés
-                if exam_row.specialty_id and exam_row.level_id:
-                    students = db.query(StudentProfile).filter(
-                        StudentProfile.specialty_id == exam_row.specialty_id,
-                        StudentProfile.level_id == exam_row.level_id,
-                    ).all()
-                    for sp in students:
-                        db.add(Notification(
-                            id=str(uuid.uuid4()),
-                            user_id=sp.user_id,
-                            title="Nouvelle épreuve disponible",
-                            message=f"L'épreuve « {exam_row.title} » est maintenant ouverte. Bonne chance !",
-                            type="info",
-                            is_read=False,
-                        ))
+                _notify_students_for_exam_publication(db, exam_row)
             db.commit()
 
     query = db.query(model)
@@ -289,6 +372,14 @@ def db_insert(
         obj = model(**data)
         db.add(obj)
         db.flush()
+
+        if payload.table == "exams":
+            exam_status = getattr(obj, "status", None)
+            if exam_status == "publie":
+                _notify_students_for_exam_publication(db, obj)
+            if exam_status in {"programme", "publie"}:
+                _notify_admins_for_exam_action(db, obj, current_user, current_role, exam_status)
+
         created_rows.append(serialize_row(obj))
 
     db.commit()
@@ -339,6 +430,8 @@ def db_update(
             query = query.filter(Submission.exam_id.in_(prof_exam_ids))
 
     rows = query.all()
+    publish_candidates: list[Exam] = []
+    admin_notification_candidates: list[tuple[Exam, str]] = []
 
     # Convert ISO datetime strings to Python datetime objects
     dt_cols = DATETIME_COLUMNS.get(payload.table, set())
@@ -379,6 +472,8 @@ def db_update(
             parsed_data = {k: v for k, v in parsed_data.items() if k in {"is_read"}}
 
     for row in rows:
+        previous_status = getattr(row, "status", None) if payload.table == "exams" else None
+
         for key, value in parsed_data.items():
             if hasattr(row, key):
                 setattr(row, key, value)
@@ -387,10 +482,28 @@ def db_update(
             # Business rule: blank answer cannot receive points.
             setattr(row, "points_awarded", 0.0)
 
+        if payload.table == "exams":
+            current_status = getattr(row, "status", None)
+            if previous_status != current_status and current_status in {"programme", "publie"}:
+                admin_notification_candidates.append((row, current_status))
+            if previous_status != "publie" and current_status == "publie":
+                publish_candidates.append(row)
+
         if hasattr(row, "updated_at"):
             setattr(row, "updated_at", datetime.utcnow())
 
     db.commit()
+
+    if payload.table == "exams":
+        should_commit_notifications = False
+        for exam_row, action in admin_notification_candidates:
+            created = _notify_admins_for_exam_action(db, exam_row, current_user, current_role, action)
+            should_commit_notifications = should_commit_notifications or created > 0
+        for exam_row in publish_candidates:
+            created = _notify_students_for_exam_publication(db, exam_row)
+            should_commit_notifications = should_commit_notifications or created > 0
+        if should_commit_notifications:
+            db.commit()
 
     # Notifier l'étudiant quand sa note est définitive
     if payload.table == "submissions" and payload.data.get("status") == "corrige":

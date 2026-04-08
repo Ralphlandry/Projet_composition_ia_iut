@@ -267,6 +267,59 @@ Open the Vite URL (usually http://localhost:5173).
 
 ---
 
+## FR/EN - Docker deployment (recommended for local demos)
+
+A ready-to-use [docker-compose.yml](docker-compose.yml) is provided at the project root.
+
+### FR - Pourquoi Docker ici ?
+
+- Les services ne consomment des ressources que lorsqu'ils sont demarres
+- Le profil `ai` permet d'activer Ollama + Qwen seulement quand necessaire
+- L'environnement devient reproductible sur un autre PC en une commande
+
+### EN - Why Docker here?
+
+- Services only consume resources when the containers are running
+- The `ai` profile enables Ollama + Qwen only when needed
+- The environment becomes portable and reproducible on another PC
+
+### Start the project without AI
+
+```powershell
+docker compose up -d postgres backend frontend
+```
+
+### Start the full project with AI and Ollama/Qwen
+
+```powershell
+docker compose --profile ai up -d
+```
+
+### First-time initialization
+
+Once the backend is up, initialize base data:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8001/api/setup/init
+```
+
+### Useful URLs
+
+- Frontend: http://localhost:8080
+- Backend docs: http://localhost:8001/docs
+- AI health: http://localhost:8000/health
+- Ollama API: http://localhost:11434
+
+### Stop everything
+
+```powershell
+docker compose down
+```
+
+> Note: on the first AI startup, downloading the `qwen2.5:3b` model can take several minutes.
+
+---
+
 ## FR/EN - Validation checks
 
 - AI health: http://localhost:8000/health
@@ -283,6 +336,72 @@ cd exam-backend-fastapi
 .\.venv\Scripts\Activate.ps1
 python -m pytest tests/ -v
 ```
+
+---
+
+## FR - Analyse qualite/securite avec SonarQube (local)
+
+Le projet inclut deja une configuration SonarQube locale dans [sonar-project.properties](sonar-project.properties).
+
+### Option A - Serveur SonarQube en Docker (recommande)
+
+1. Lancer SonarQube en local:
+
+```powershell
+docker run -d --name sonarqube-local -p 9000:9000 sonarqube:lts-community
+```
+
+2. Ouvrir SonarQube:
+
+- URL: http://localhost:9000
+- Identifiants initiaux: admin / admin
+
+3. Creer un token utilisateur dans SonarQube:
+
+- My Account -> Security -> Generate Tokens
+
+4. Installer SonarScanner CLI (si non installe), puis lancer le scan depuis la racine du projet:
+
+```powershell
+sonar-scanner -Dsonar.host.url=http://localhost:9000 -Dsonar.token=VOTRE_TOKEN
+```
+
+### Option B - SonarQube for IDE (analyse dans VS Code)
+
+Tu peux aussi utiliser l'extension SonarQube for IDE pour analyser fichier par fichier pendant le developpement.
+
+---
+
+## EN - Quality/Security analysis with SonarQube (local)
+
+The project already includes a local SonarQube configuration in [sonar-project.properties](sonar-project.properties).
+
+### Option A - Docker SonarQube server (recommended)
+
+1. Start SonarQube locally:
+
+```powershell
+docker run -d --name sonarqube-local -p 9000:9000 sonarqube:lts-community
+```
+
+2. Open SonarQube:
+
+- URL: http://localhost:9000
+- Initial credentials: admin / admin
+
+3. Create a user token:
+
+- My Account -> Security -> Generate Tokens
+
+4. Install SonarScanner CLI (if needed), then run from project root:
+
+```powershell
+sonar-scanner -Dsonar.host.url=http://localhost:9000 -Dsonar.token=YOUR_TOKEN
+```
+
+### Option B - SonarQube for IDE (in-editor analysis)
+
+You can also use SonarQube for IDE in VS Code to analyze files during development.
 
 ---
 

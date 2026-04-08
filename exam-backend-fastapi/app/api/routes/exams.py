@@ -198,7 +198,7 @@ def _build_answer_prompt(q: _QuestionIn) -> str:
 
 def _ask_ollama(prompt: str, question_type: str = "") -> str | None:
     """Call Ollama with qwen2.5:3b. Token and context limits adapt to question type."""
-    ollama_host = "http://localhost:11434"
+    ollama_host = settings.ollama_url.rstrip("/")
     if question_type == "vrai_faux":
         max_tokens = 5
         num_ctx = 512
